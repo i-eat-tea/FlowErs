@@ -4,15 +4,16 @@
  */
 
 import React, { useState } from 'react';
-import { Flower2, Lock, User, Globe, Sparkles, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Flower2, Lock, User, Globe, Sparkles, AlertCircle, ShieldCheck, Stethoscope } from 'lucide-react';
 
 interface LoginViewProps {
   lang: 'en' | 'kh';
   setLang: (lang: 'en' | 'kh') => void;
   onLoginSuccess: (name: string) => void;
+  onSwitchToDoctorLogin: () => void;
 }
 
-export default function LoginView({ lang, setLang, onLoginSuccess }: LoginViewProps) {
+export default function LoginView({ lang, setLang, onLoginSuccess, onSwitchToDoctorLogin }: LoginViewProps) {
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -154,6 +155,17 @@ export default function LoginView({ lang, setLang, onLoginSuccess }: LoginViewPr
             <span>{lang === 'en' ? "Unlock Personal Passport" : "បើកគណនីលិខិតឆ្លងដែន"}</span>
           </button>
         </form>
+
+        {/* Switch to Doctor Login */}
+        <button
+          type="button"
+          onClick={onSwitchToDoctorLogin}
+          className="w-full py-2.5 border-2 border-[#2F6F8F] hover:bg-[#AEE3D8]/20 text-[#2F6F8F] font-black rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center space-x-2"
+          id="switch-to-doctor-btn"
+        >
+          <Stethoscope className="w-3.5 h-3.5" />
+          <span>{lang === 'en' ? 'Doctor / Hospital Login' : 'ចូលសម្រាប់គ្រូពេទ្យ / មន្ទីរពេទ្យ'}</span>
+        </button>
 
         {/* Footer info */}
         <div className="text-center pt-2">
