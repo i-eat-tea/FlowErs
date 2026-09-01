@@ -1,0 +1,455 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { FlowerGrowthStage } from './types';
+
+// Empty defaults — data now lives in MySQL
+export const DEFAULT_PROFILE = {
+  personal: {
+    name: "",
+    dob: "",
+    age: 0,
+    phone: ""
+  },
+  pregnancy: {
+    edd: "",
+    gravida: 0,
+    para: 0
+  },
+  medical: {
+    bloodType: "",
+    allergies: "",
+    existingConditions: "",
+    currentMedications: "",
+    emergencyContactName: "",
+    emergencyContactRelation: "",
+    emergencyContactPhone: ""
+  }
+};
+
+export const DEFAULT_RECORDS: any[] = [];
+export const DEFAULT_APPOINTMENTS: any[] = [];
+
+// Flower-based Pregnancy Growth Milestones (Continuous Life Stage Metaphor)
+export const FLOWER_GROWTH_STAGES: FlowerGrowthStage[] = [
+  {
+    week: 4,
+    stageKey: "seed",
+    stageNameEn: "Seed Stage",
+    stageNameKh: "ដំណាក់កាលគ្រាប់ពូជ",
+    flowerEn: "Tiny Botanical Seed",
+    flowerKh: "គ្រាប់ពូជជីវិតតូច",
+    symbol: "🌱",
+    growthDescriptionEn: "Implantation is complete. The neural tube and blastocyst are forming.",
+    growthDescriptionKh: "ការបង្កកំណើតបានជោគជ័យ។ បំពង់សរសៃប្រសាទកំពុងចាប់ផ្តើមបង្កើត។",
+    babyLength: "≈ 0.1 cm",
+    babyWeight: "< 1 g"
+  },
+  {
+    week: 8,
+    stageKey: "sprout",
+    stageNameEn: "Sprout Stage",
+    stageNameKh: "ដំណាក់កាលពន្លកដុះ",
+    flowerEn: "Fresh Green Sprout",
+    flowerKh: "ពន្លកដុះថ្មី",
+    symbol: "🌿",
+    growthDescriptionEn: "Tiny heartbeat detected on ultrasound. Little arm and leg buds appear.",
+    growthDescriptionKh: "ចង្វាក់បេះដូងកូនចាប់ផ្តើមលោត។ ដៃនិងជើងតូចៗចាប់ផ្តើមដុះ។",
+    babyLength: "≈ 1.6 cm",
+    babyWeight: "≈ 1 g"
+  },
+  {
+    week: 12,
+    stageKey: "small_plant",
+    stageNameEn: "Small Plant Stage",
+    stageNameKh: "ដំណាក់កាលកូនរុក្ខជាតិ",
+    flowerEn: "Tender Young Plant",
+    flowerKh: "កូនរុក្ខជាតិតូច",
+    symbol: "🌱",
+    growthDescriptionEn: "Reflexes are developing. Fetal organs and miniature fingernails have formed.",
+    growthDescriptionKh: "សរីរាង្គទារក និងក្រចកតូចៗបានកកើតរួចរាល់។ កូនចាប់ផ្តើមធ្វើចលនាបត់បែន។",
+    babyLength: "≈ 5.4 cm",
+    babyWeight: "≈ 14 g"
+  },
+  {
+    week: 16,
+    stageKey: "growing_plant",
+    stageNameEn: "Growing Plant Stage",
+    stageNameKh: "ដំណាក់កាលរុក្ខជាតិលូតលាស់",
+    flowerEn: "Flourishing Plant",
+    flowerKh: "រុក្ខជាតិលូតលាស់រឹងមាំ",
+    symbol: "🌿",
+    growthDescriptionEn: "Eyes can sense gentle light. The baby can now make gentle sucking motions.",
+    growthDescriptionKh: "ភ្នែកទារកចាប់ផ្តើមដឹងពន្លឺ។ កូនអាចធ្វើចលនាបៀមមេដៃបាន។",
+    babyLength: "≈ 11.6 cm",
+    babyWeight: "≈ 100 g"
+  },
+  {
+    week: 20,
+    stageKey: "growing_plant",
+    stageNameEn: "Growing Plant Stage",
+    stageNameKh: "ដំណាក់កាលរុក្ខជាតិលូតលាស់",
+    flowerEn: "Graceful Leafy Stems",
+    flowerKh: "រុក្ខជាតិសាខាលូតលាស់",
+    symbol: "🌿",
+    growthDescriptionEn: "Halfway milestone! The baby can hear your soothing voice and music.",
+    growthDescriptionKh: "ដល់ពាក់កណ្តាលផ្លូវហើយ! ទារកអាចស្តាប់ឮសំឡេងម្តាយ និងតន្ត្រីយ៉ាងច្បាស់។",
+    babyLength: "≈ 16.4 cm",
+    babyWeight: "≈ 300 g"
+  },
+  {
+    week: 24,
+    stageKey: "flower_bud",
+    stageNameEn: "Flower Bud Stage",
+    stageNameKh: "ដំណាក់កាលផ្កាក្រពុំ",
+    flowerEn: "Developing Rose Bud",
+    flowerKh: "ផ្កាក្រពុំស្រទាប់ផ្កាឈូក",
+    symbol: "🌸",
+    growthDescriptionEn: "Lungs are developing respiratory branches. Taste buds are active.",
+    growthDescriptionKh: "សួតទារកកំពុងលូតលាស់សរសៃខ្យល់។ អណ្តាតចាប់ផ្តើមដឹងរសជាតិទឹកភ្លោះ។",
+    babyLength: "≈ 30.0 cm",
+    babyWeight: "≈ 600 g"
+  },
+  {
+    week: 28,
+    stageKey: "blooming",
+    stageNameEn: "Blooming Flower Stage",
+    stageNameKh: "ដំណាក់កាលផ្កាកំពុងរីក",
+    flowerEn: "Unfolding Blossom",
+    flowerKh: "ផ្កាកំពុងរីកស្រទាប់",
+    symbol: "🌸",
+    growthDescriptionEn: "Welcome to the 3rd trimester! Baby dreams during active REM sleep cycles.",
+    growthDescriptionKh: "ស្វាគមន៍ត្រីមាសទី៣! ទារកចាប់ផ្តើមគេងយល់សប្តិ និងមានចលនាភ្នែករហ័ស។",
+    babyLength: "≈ 37.6 cm",
+    babyWeight: "≈ 1,000 g"
+  },
+  {
+    week: 32,
+    stageKey: "blooming",
+    stageNameEn: "Blooming Flower Stage",
+    stageNameKh: "ដំណាក់កាលផ្កាកំពុងរីក",
+    flowerEn: "Radiant Petal Bloom",
+    flowerKh: "ផ្ការីកស្រទាប់ស្គុះស្គាយ",
+    symbol: "🌸",
+    growthDescriptionEn: "Practicing blinking and body temperature regulation. Rapid brain growth.",
+    growthDescriptionKh: "ទារកហាត់ព្រិចភ្នែក និងរក្សាកម្ដៅរាងកាយ។ ខួរក្បាលលូតលាស់យ៉ាងលឿន។",
+    babyLength: "≈ 42.4 cm",
+    babyWeight: "≈ 1,700 g"
+  },
+  {
+    week: 36,
+    stageKey: "full_bloom",
+    stageNameEn: "Full Bloom Stage",
+    stageNameKh: "ដំណាក់កាលផ្ការីកពេញទំហឹង",
+    flowerEn: "Glorious Full Bloom",
+    flowerKh: "ផ្ការីកពេញលេញស្រស់បំព្រង",
+    symbol: "🌸",
+    growthDescriptionEn: "Almost full term! Baby descends deeper into the pelvis, ready for birth.",
+    growthDescriptionKh: "ជិតដល់ថ្ងៃហើយ! ក្បាលកូនចាប់ផ្តើមចុះមកក្នុងអាងត្រគាកត្រៀមសម្រាល។",
+    babyLength: "≈ 47.4 cm",
+    babyWeight: "≈ 2,600 g"
+  },
+  {
+    week: 40,
+    stageKey: "full_bloom",
+    stageNameEn: "Full Bloom Stage",
+    stageNameKh: "ដំណាក់កាលផ្ការីកពេញទំហឹង",
+    flowerEn: "Life In Full Bloom",
+    flowerKh: "ផ្កានៃជីវិតរីកពេញលេញ",
+    symbol: "🌸",
+    growthDescriptionEn: "Delivery week! Your beautiful little one is fully grown and ready to meet you.",
+    growthDescriptionKh: "សប្តាហ៍សម្រាល! កូនតូចដ៏ស្រស់ស្អាតបានលូតលាស់ពេញលេញ រួចរាល់ជួបមុខអ្នកម្តាយ។",
+    babyLength: "≈ 51.2 cm",
+    babyWeight: "≈ 3,400 g"
+  }
+];
+
+// Helper to get flower for any week
+export function getFlowerForWeek(week: number): FlowerGrowthStage {
+  const sorted = [...FLOWER_GROWTH_STAGES].sort((a, b) => a.week - b.week);
+  let match = sorted[0];
+  for (const item of sorted) {
+    if (week >= item.week) {
+      match = item;
+    }
+  }
+  return match;
+}
+
+// Bilingual Translations
+export const TRANSLATIONS = {
+  en: {
+    appName: "FlowErs",
+    tagline: "Digital Maternal Health Passport & Document Vault",
+    home: "Home",
+    records: "My Records",
+    calendar: "Calendar",
+    passport: "Passport",
+    emergency: "SOS",
+
+    // Greeting & Home
+    goodMorning: "Good morning",
+    goodAfternoon: "Good afternoon",
+    goodEvening: "Good evening",
+    weekCount: "Week",
+    trimester: "Trimester",
+    daysToDelivery: "Days to Delivery",
+    conception: "Conception",
+    week40: "Week 40",
+    babyGrowthStage: "Baby Growth Stage",
+    scanUploadCTA: "Scan / Upload Medical Record",
+    scanUploadDesc: "Digitize and organize ultrasounds, lab tests, prescriptions & doctor notes",
+    quickStats: "Vault Overview",
+    totalRecords: "Total Records",
+    upcomingAppt: "Next Checkup",
+    noUpcomingAppt: "No checkups scheduled",
+    recentRecords: "Recent Medical Records",
+    viewAllRecords: "View All Records",
+    emergencyCard: "EMERGENCY PASSPORT CARD",
+    emergencyTap: "Tap for emergency medical profile & provider QR",
+
+    // Records Vault
+    vaultTitle: "Medical Records Vault",
+    vaultSubtitle: "All your pregnancy documents safely digitized and organized in one place",
+    uploadRecordBtn: "Upload Record",
+    scanRecordBtn: "Scan Document (Camera)",
+    searchRecordsPlaceholder: "Search records by title, doctor, clinic, or keyword...",
+    filterAll: "All Records",
+    filterUltrasound: "Ultrasounds",
+    filterLab: "Lab Tests",
+    filterPrescription: "Prescriptions",
+    filterVaccine: "Vaccines",
+    filterDoctorNote: "Doctor Notes",
+    filterOther: "Other",
+    filterTrimesterAll: "All Trimesters",
+    filterT1: "Trimester 1 (W1-12)",
+    filterT2: "Trimester 2 (W13-27)",
+    filterT3: "Trimester 3 (W28-40)",
+    noRecordsFound: "No medical records found matching your filters.",
+    addFirstRecord: "Add your first medical document",
+    recordDetails: "Record Details",
+    extractedFindings: "Extracted Clinical Findings",
+    facility: "Hospital / Clinic",
+    doctor: "Healthcare Provider",
+    recordDate: "Record Date",
+    gestationalWeek: "Gestational Week",
+    recordCategory: "Category",
+    clinicalNotes: "Notes & Clinical Summary",
+    statusNormal: "Normal",
+    statusFollowUp: "Follow-up Needed",
+    statusCompleted: "Completed",
+    statusPending: "Pending",
+    viewAttachment: "View Scanned Document",
+    noAttachment: "No scan image attached",
+    deleteRecord: "Delete Record",
+    confirmDeleteRecord: "Are you sure you want to delete this medical record?",
+
+    // Add Record Form
+    newRecordTitle: "Scan & Save Medical Record",
+    docTitleLabel: "Document Title *",
+    docTitlePlaceholder: "e.g., 20-Week Anomaly Ultrasound Scan, OGTT Blood Test",
+    docCategoryLabel: "Record Category *",
+    docDateLabel: "Date of Exam / Visit *",
+    docWeekLabel: "Pregnancy Week (1-40)",
+    docFacilityLabel: "Hospital / Clinic Name",
+    docFacilityPlaceholder: "e.g., Calmette Hospital, Khema Clinic",
+    docDoctorLabel: "Doctor / Midwife Name",
+    docDoctorPlaceholder: "e.g., Dr. Sophy Lim",
+    docNotesLabel: "Clinical Notes & Doctor Advice",
+    docNotesPlaceholder: "e.g., Fetal heartbeat strong, baby in cephalic position, rest advised.",
+    docStatusLabel: "Clinical Status",
+    docUploadLabel: "Document Photo / Scan File",
+    dragDropText: "Drag and drop document photo, or click to upload",
+    useCameraText: "Take Photo with Camera",
+    saveRecordBtn: "Save to Medical Vault",
+    cancelBtn: "Cancel",
+
+    // Calendar
+    calendarTitle: "Pregnancy Calendar & Reminders",
+    calendarSubtitle: "Keep track of your scheduled prenatal visits, ultrasounds, and vaccines",
+    addApptBtn: "Add Checkup Reminder",
+    newApptTitle: "Schedule Prenatal Checkup",
+    apptDateLabel: "Appointment Date *",
+    apptTimeLabel: "Time",
+    apptFacilityLabel: "Hospital / Clinic *",
+    apptDoctorLabel: "Doctor / Healthcare Provider",
+    apptTypeLabel: "Checkup Type",
+    apptReminderLabel: "Reminder Alert",
+    apptNotesLabel: "Notes / Questions for Doctor",
+    saveApptBtn: "Save Appointment",
+    upcomingCheckups: "Upcoming Appointments",
+    completedCheckups: "Past Visit Timeline",
+    markCompleted: "Mark as Attended",
+    markIncomplete: "Re-open",
+    deleteAppt: "Delete",
+    noApptsMessage: "No appointments scheduled. Tap '+' to add a reminder!",
+
+    // Passport & Profile
+    passportTitle: "Maternal Health Passport",
+    passportSubtitle: "Your vital pregnancy profile and emergency medical identification",
+    editPassportBtn: "Edit Passport",
+    savePassportBtn: "Save Changes",
+    personalInfo: "Mother's Information",
+    pregnancyInfo: "Pregnancy Profile",
+    medicalHistory: "Critical Medical Information",
+    fullName: "Full Name",
+    dob: "Date of Birth",
+    age: "Age",
+    phone: "Phone Number",
+    edd: "Estimated Due Date (EDD)",
+    gravidaPara: "Gravida / Para (G/P)",
+    bloodType: "Blood Group",
+    allergies: "Allergies & Drug Reactions",
+    existingConditions: "Pre-existing Medical Conditions",
+    currentMedications: "Current Medications & Supplements",
+    emergencyContact: "Emergency Contact Person",
+    emergencyPhone: "Emergency Phone",
+    relation: "Relationship",
+    qrTitle: "Provider Emergency QR Code",
+    qrSubtitle: "Healthcare providers can scan this to view your vital maternal passport",
+    exportSummaryBtn: "View Maternal Summary Report",
+    logoutBtn: "Log Out",
+
+    // Safety Disclaimer
+    disclaimerTitle: "Important Medical Disclaimer",
+    disclaimerContent: "FlowErs is a digital health record vault and companion designed to help mothers organize their medical history. It is not a substitute for professional medical advice, diagnosis, or clinical emergency care."
+  },
+  kh: {
+    appName: "FlowErs",
+    tagline: "លិខិតឆ្លងដែនសុខភាពមាតា និងឃ្លាំងឯកសារវេជ្ជសាស្ត្រឌីជីថល",
+    home: "ទំព័រដើម",
+    records: "កំណត់ត្រាខ្ញុំ",
+    calendar: "ប្រតិទិន",
+    passport: "លិខិតឆ្លងដែន",
+    emergency: "សង្គ្រោះ",
+
+    // Greeting & Home
+    goodMorning: "អរុណសួស្តី",
+    goodAfternoon: "ទិវាសួស្តី",
+    goodEvening: "សាយណ្ហសួស្តី",
+    weekCount: "សប្តាហ៍",
+    trimester: "ត្រីមាស",
+    daysToDelivery: "ថ្ងៃនៅសល់ដល់សម្រាល",
+    conception: "ចាប់ផ្តើម",
+    week40: "សប្តាហ៍ ៤០",
+    babyGrowthStage: "ដំណាក់កាលលូតលាស់របស់កូន",
+    scanUploadCTA: "ស្កេន / បញ្ចូលឯកសារវេជ្ជសាស្ត្រ",
+    scanUploadDesc: "ឌីជីថលូបនីយកម្ម និងរៀបចំឯកសារអេកូ តេស្តឈាម វេជ្ជបញ្ជា និងកំណត់ត្រាគ្រូពេទ្យ",
+    quickStats: "ទិដ្ឋភាពទូទៅ",
+    totalRecords: "ឯកសារសរុប",
+    upcomingAppt: "ការណាត់ជួបបន្ទាប់",
+    noUpcomingAppt: "មិនទាន់មានការណាត់ជួបខាងមុខ",
+    recentRecords: "ឯកសារវេជ្ជសាស្ត្រថ្មីៗ",
+    viewAllRecords: "មើលឯកសារទាំងអស់",
+    emergencyCard: "ប័ណ្ណសង្គ្រោះបន្ទាន់មាតា",
+    emergencyTap: "ចុចដើម្បីមើលព័ត៌មានវេជ្ជសាស្ត្រសំខាន់ & QR Code គ្រូពេទ្យ",
+
+    // Records Vault
+    vaultTitle: "ឃ្លាំងឯកសារវេជ្ជសាស្ត្រ",
+    vaultSubtitle: "ឯកសារពិនិត្យផ្ទៃពោះរបស់អ្នកទាំងអស់ ត្រូវបានរក្សាទុក និងរៀបចំយ៉ាងមានសុវត្ថិភាព",
+    uploadRecordBtn: "បញ្ចូលឯកសារ",
+    scanRecordBtn: "ស្កេនឯកសារ (កាមេរ៉ា)",
+    searchRecordsPlaceholder: "ស្វែងរកតាមឈ្មោះឯកសារ ឈ្មោះគ្រូពេទ្យ មន្ទីរពេទ្យ...",
+    filterAll: "ឯកសារទាំងអស់",
+    filterUltrasound: "អេកូស្កេន",
+    filterLab: "តេស្តមន្ទីរពិសោធន៍",
+    filterPrescription: "វេជ្ជបញ្ជា & ថ្នាំ",
+    filterVaccine: "វ៉ាក់សាំង",
+    filterDoctorNote: "កំណត់ត្រាគ្រូពេទ្យ",
+    filterOther: "ផ្សេងៗ",
+    filterTrimesterAll: "គ្រប់ត្រីមាស",
+    filterT1: "ត្រីមាសទី១ (ស១-១២)",
+    filterT2: "ត្រីមាសទី២ (ស១៣-២៧)",
+    filterT3: "ត្រីមាសទី៣ (ស២៨-៤០)",
+    noRecordsFound: "មិនមានឯកសារដែលត្រូវនឹងការស្វែងរកឡើយ។",
+    addFirstRecord: "បញ្ចូលឯកសារវេជ្ជសាស្ត្រដំបូងរបស់អ្នក",
+    recordDetails: "ព័ត៌មានលម្អិតឯកសារ",
+    extractedFindings: "លទ្ធផលវេជ្ជសាស្ត្រសំខាន់ៗ",
+    facility: "មន្ទីរពេទ្យ / គ្លីនិក",
+    doctor: "គ្រូពេទ្យព្យាបាល",
+    recordDate: "កាលបរិច្ឆេទ",
+    gestationalWeek: "សប្តាហ៍មានផ្ទៃពោះ",
+    recordCategory: "ប្រភេទឯកសារ",
+    clinicalNotes: "ការណែនាំ និងកំណត់សម្គាល់",
+    statusNormal: "ធម្មតា",
+    statusFollowUp: "ត្រូវតាមដានបន្ត",
+    statusCompleted: "បានបញ្ចប់",
+    statusPending: "រង់ចាំលទ្ធផល",
+    viewAttachment: "មើលរូបថតឯកសារស្កេន",
+    noAttachment: "គ្មានរូបថតឯកសារភ្ជាប់",
+    deleteRecord: "លុបឯកសារ",
+    confirmDeleteRecord: "តើអ្នកប្រាកដជាចង់លុបឯកសារវេជ្ជសាស្ត្រនេះមែនទេ?",
+
+    // Add Record Form
+    newRecordTitle: "ស្កេន & រក្សាទុកឯកសារវេជ្ជសាស្ត្រ",
+    docTitleLabel: "ឈ្មោះឯកសារ *",
+    docTitlePlaceholder: "ឧ. អេកូស្កេនត្រីមាសទី២, តេស្តជាតិស្ករ OGTT",
+    docCategoryLabel: "ប្រភេទឯកសារ *",
+    docDateLabel: "កាលបរិច្ឆេទពិនិត្យ *",
+    docWeekLabel: "សប្តាហ៍មានផ្ទៃពោះ (១-៤០)",
+    docFacilityLabel: "ឈ្មោះមន្ទីរពេទ្យ / គ្លីនិក",
+    docFacilityPlaceholder: "ឧ. មន្ទីរពេទ្យកាល់ម៉ែត, គ្លីនិកឃេម៉ា",
+    docDoctorLabel: "ឈ្មោះគ្រូពេទ្យ / ឆ្មប",
+    docDoctorPlaceholder: "ឧ. វេជ្ជបណ្ឌិត សុភី លីម",
+    docNotesLabel: "ការណែនាំរបស់គ្រូពេទ្យ",
+    docNotesPlaceholder: "ឧ. បេះដូងកូនលោតល្អ ទីតាំងកូនត្រឹមត្រូវ ណែនាំសម្រាកឱ្យបានគ្រប់គ្រាន់។",
+    docStatusLabel: "ស្ថានភាពលទ្ធផល",
+    docUploadLabel: "រូបថតឯកសារ / ក្រដាសលទ្ធផល",
+    dragDropText: "អូសទម្លាក់រូបថតឯកសារ ឬចុចដើម្បីបញ្ចូល",
+    useCameraText: "ថតរូបភាពជាមួយកាមេរ៉ា",
+    saveRecordBtn: "រក្សាទុកក្នុងឃ្លាំងឯកសារ",
+    cancelBtn: "បោះបង់",
+
+    // Calendar
+    calendarTitle: "ប្រតិទិនពិនិត្យសុខភាព & រំលឹក",
+    calendarSubtitle: "តាមដានកាលវិភាគពិនិត្យផ្ទៃពោះ ការអេកូ និងការចាក់វ៉ាក់សាំងរបស់អ្នក",
+    addApptBtn: "បន្ថែមការរំលឹក",
+    newApptTitle: "កំណត់កាលវិភាគពិនិត្យផ្ទៃពោះ",
+    apptDateLabel: "កាលបរិច្ឆេទ *",
+    apptTimeLabel: "ម៉ោង",
+    apptFacilityLabel: "មន្ទីរពេទ្យ / គ្លីនិក *",
+    apptDoctorLabel: "គ្រូពេទ្យព្យាបាល",
+    apptTypeLabel: "ប្រភេទការពិនិត្យ",
+    apptReminderLabel: "ការរំលឹកទុកជាមុន",
+    apptNotesLabel: "កំណត់ត្រា / សំណួរចង់សួរគ្រូពេទ្យ",
+    saveApptBtn: "រក្សាទុកការណាត់ជួប",
+    upcomingCheckups: "ការណាត់ជួបខាងមុខ",
+    completedCheckups: "ប្រវត្តិការពិនិត្យកន្លងមក",
+    markCompleted: "បានពិនិត្យរួចរាល់",
+    markIncomplete: "បើកឡើងវិញ",
+    deleteAppt: "លុប",
+    noApptsMessage: "មិនទាន់មានការណាត់ជួបទេ។ ចុច '+' ដើម្បីបន្ថែមការរំលឹក!",
+
+    // Passport & Profile
+    passportTitle: "លិខិតឆ្លងដែនសុខភាពមាតា",
+    passportSubtitle: "ប្រវត្តិសុខភាពផ្ទៃពោះសំខាន់ និងប័ណ្ណសម្គាល់វេជ្ជសាស្ត្របន្ទាន់របស់អ្នក",
+    editPassportBtn: "កែប្រែលិខិតឆ្លងដែន",
+    savePassportBtn: "រក្សាទុកការផ្លាស់ប្តូរ",
+    personalInfo: "ព័ត៌មានផ្ទាល់ខ្លួនអ្នកម្តាយ",
+    pregnancyInfo: "ព័ត៌មានការមានផ្ទៃពោះ",
+    medicalHistory: "ប្រវត្តិវេជ្ជសាស្ត្រសំខាន់ៗ",
+    fullName: "ឈ្មោះពេញ",
+    dob: "ថ្ងៃខែឆ្នាំកំណើត",
+    age: "អាយុ",
+    phone: "លេខទូរស័ព្ទ",
+    edd: "ថ្ងៃរំពឹងសម្រាល (EDD)",
+    gravidaPara: "ចំនួនមានផ្ទៃពោះ / សម្រាល (G/P)",
+    bloodType: "ក្រុមឈាម",
+    allergies: "ប្រវត្តិប្រតិកម្មថ្នាំ",
+    existingConditions: "ជំងឺប្រចាំកាយ",
+    currentMedications: "ថ្នាំ និងវីតាមីនកំពុងប្រើ",
+    emergencyContact: "អ្នកទាក់ទងពេលអាសន្ន",
+    emergencyPhone: "លេខទូរស័ព្ទបន្ទាន់",
+    relation: "ត្រូវជា",
+    qrTitle: "QR Code វេជ្ជសាស្ត្របន្ទាន់",
+    qrSubtitle: "គ្រូពេទ្យអាចស្កេនដើម្បីមើលទិន្នន័យសុខភាពសំខាន់របស់អ្នកភ្លាមៗ",
+    exportSummaryBtn: "មើលរបាយការណ៍លិខិតឆ្លងដែនមាតា",
+    logoutBtn: "ចាកចេញ",
+
+    // Safety Disclaimer
+    disclaimerTitle: "ការបដិសេធវេជ្ជសាស្ត្រសំខាន់",
+    disclaimerContent: "FlowErs គឺជាកម្មវិធីរក្សាទុកឯកសារសុខភាពឌីជីថល និងជួយសម្រួលដល់ស្ត្រីមានផ្ទៃពោះ។ វាមិនអាចជំនួសការធ្វើរោគវិនិច្ឆ័យ ឬការព្យាបាលផ្ទាល់ពីគ្រូពេទ្យជំនាញឡើយ។"
+  }
+};

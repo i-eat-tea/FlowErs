@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Kantumruy+Pro:ital,wght@0,100..700;1,100..700&family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Siemreap&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Siemreap", "Kantumruy Pro", "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-khmer: "Siemreap", "Kantumruy Pro", sans-serif;
+  --font-khmer-heading: "Kantumruy Pro", "Siemreap", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  /* BRAND STYLE LOCKED PALETTE */
+  --color-deep-blue: #2F6F8F;
+  --color-soft-pink: #F4A6B5;
+  --color-mint: #AEE3D8;
+  --color-soft-cream: #F6E5C3;
+  --color-bright-rose: #FA6B90;
+
+  /* Supporting Colors */
+  --color-baby-pink: #FEC7DF;
+  --color-blush-pink: #FDDEEC;
+  --color-dusty-rose: #F5B1CE;
+  --color-soft-lavender: #BFBEE9;
+  --color-pastel-periwinkle: #D5D1F1;
+  --color-warm-white: #FEFAFB;
+  --color-cream-light: #FFF7E9;
+  --color-muted-rose: #CFADB9;
+}
+
+/* Base resets & styles */
+body {
+  font-family: var(--font-sans);
+  background-color: #FEFAFB;
+  color: #2F6F8F;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+/* Soft, rounded, warm, readable Khmer typography styling */
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: "Kantumruy Pro", "Siemreap", "Plus Jakarta Sans", sans-serif;
+  letter-spacing: -0.01em;
+  color: #2F6F8F;
+}
+
+/* Ensure Khmer text has sufficient vertical rhythm and no vowel clipping */
+:lang(kh), :lang(km), .lang-kh {
+  font-family: "Siemreap", "Kantumruy Pro", sans-serif;
+  line-height: 1.65;
+}
+
+:lang(kh) h1, :lang(kh) h2, :lang(kh) h3, :lang(kh) h4, :lang(kh) h5, :lang(kh) h6,
+:lang(km) h1, :lang(km) h2, :lang(km) h3, :lang(km) h4, :lang(km) h5, :lang(kh) h6 {
+  font-family: "Kantumruy Pro", "Siemreap", sans-serif;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Custom scrollbar to keep layout clean and on-brand */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #FEFAFB;
+}
+::-webkit-scrollbar-thumb {
+  background: #FDDEEC;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #F5B1CE;
+}

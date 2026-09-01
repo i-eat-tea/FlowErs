@@ -1,0 +1,5 @@
+{
+  "name": "FlowErs — Digital Maternal Health Passport",
+  "description": "A digital maternal health passport and medical document vault helping pregnant women digitize, organize, manage, and access all of their pregnancy medical records in one place.",
+  "requestFramePermissions": ["camera"]
+}
