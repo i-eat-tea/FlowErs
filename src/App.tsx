@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Home, FileText, Calendar, User, Plus, Camera, Flower2 } from 'lucide-react';
+import { Home, FileText, Calendar, User, Plus, Camera, Flower2, LogOut } from 'lucide-react';
 
 // Data and Types
-import { PassportProfile, MedicalRecord, Appointment } from './types';
+import { PassportProfile, MedicalRecord, Appointment, UserRole, MotherProfile, PregnancyProfile, MedicalRecord as NewMedicalRecord } from './types';
 import {
   DEFAULT_PROFILE,
   DEFAULT_RECORDS,
@@ -15,7 +15,7 @@ import {
   TRANSLATIONS
 } from './data';
 
-// Components
+// Components — Mother
 import Header from './components/Header';
 import EmergencyModal from './components/EmergencyModal';
 import HomeView from './components/HomeView';
@@ -26,6 +26,12 @@ import AddRecordModal from './components/AddRecordModal';
 import JourneySummaryReport from './components/JourneySummaryReport';
 import LoginView from './components/LoginView';
 import PregnancySetupWizard from './components/PregnancySetupWizard';
+
+// Components — Doctor
+import DoctorLoginView from './components/DoctorLoginView';
+import DoctorDashboard from './components/DoctorDashboard';
+import DoctorPatientDetail from './components/DoctorPatientDetail';
+import DoctorRecordsView from './components/DoctorRecordsView';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -90,7 +96,14 @@ export default function App() {
   // Application Language ('en' | 'kh')
   const [lang, setLang] = useState<'en' | 'kh'>('en');
 
-  // Authentication & Setup States (still in localStorage — device flags)
+  // Login Mode (Mother vs Doctor)
+  const [loginMode, setLoginMode] = useState<'mother' | 'doctor'>('mother');
+
+  // User Role & Authentication
+  const [userRole, setUserRole] = useState<UserRole | null>(() => {
+    return (localStorage.getItem('flowers_user_role') as UserRole) || null;
+  });
+
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     return localStorage.getItem('flowers_is_logged_in') === 'true';
   });
@@ -98,6 +111,18 @@ export default function App() {
   const [hasCompletedSetup, setHasCompletedSetup] = useState<boolean>(() => {
     return localStorage.getItem('flowers_pregnancy_setup_completed') === 'true';
   });
+
+  // Doctor-specific state
+  const [doctorEmail, setDoctorEmail] = useState<string>(() => {
+    return localStorage.getItem('flowers_doctor_email') || '';
+  });
+
+  const [doctorName, setDoctorName] = useState<string>(() => {
+    return localStorage.getItem('flowers_doctor_name') || '';
+  });
+
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [doctorView, setDoctorView] = useState<'dashboard' | 'patient-detail' | 'patient-records'>('dashboard');
 
   // Active Tab: 4 MVP tabs strictly
   const [activeTab, setActiveTab] = useState<'home' | 'records' | 'calendar' | 'passport'>('home');
@@ -130,11 +155,56 @@ export default function App() {
   // ─── Load data from MySQL on mount (only after login) ─────────────────────
 
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || userRole !== 'mother') return;
 
     async function loadFromDB() {
-      const [dbProfile, dbRecords, dbAppointments] = await Promise.all([
-        apiGet<PassportProfile>(`/api/profile/${USER_ID}`),
+      // Try new relational endpoint first, fall back to old JSON blob
+      const motherProfileData = await apiGet<{
+        motherProfile: any;
+        pregnancyProfile: any;
+        medicalInfo: any;
+        emergencyContacts: any[];
+      }>(`/api/mother-profile/${USER_ID}`);
+
+      let dbProfile: PassportProfile | null = null;
+
+      if (motherProfileData) {
+        // Convert new relational schema back to legacy PassportProfile shape
+        const mp = motherProfileData.motherProfile;
+        const pp = motherProfileData.pregnancyProfile;
+        const mi = motherProfileData.medicalInfo;
+        const ec = motherProfileData.emergencyContacts.find((c: any) => c.isPrimary);
+
+        dbProfile = {
+          personal: {
+            name: mp?.fullName || '',
+            dob: mp?.dateOfBirth || '',
+            age: mp?.dateOfBirth ? new Date().getFullYear() - new Date(mp.dateOfBirth).getFullYear() : 0,
+            phone: mp?.phone || '',
+            height: mp?.heightCm || 0,
+            weight: mp?.prePregnancyWeightKg || 0,
+          },
+          pregnancy: {
+            edd: pp?.edd || '',
+            gravida: pp?.gravida || 0,
+            para: pp?.para || 0,
+          },
+          medical: {
+            bloodType: mi?.bloodType || '',
+            allergies: mi?.allergies || '',
+            existingConditions: mi?.existingConditions || '',
+            currentMedications: mi?.currentMedications || '',
+            emergencyContactName: ec?.name || '',
+            emergencyContactRelation: ec?.relation || '',
+            emergencyContactPhone: ec?.phone || '',
+          },
+        };
+      } else {
+        // Fall back to old JSON blob endpoint
+        dbProfile = await apiGet<PassportProfile>(`/api/profile/${USER_ID}`);
+      }
+
+      const [dbRecords, dbAppointments] = await Promise.all([
         apiGet<MedicalRecord[]>(`/api/records/${USER_ID}`),
         apiGet<Appointment[]>(`/api/appointments/${USER_ID}`),
       ]);
@@ -155,15 +225,37 @@ export default function App() {
     }
 
     loadFromDB();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, userRole]);
 
   // ─── Sync profile to MySQL + localStorage ─────────────────────────────────
 
   useEffect(() => {
-    if (!dataLoaded || !isLoggedIn) return;
+    if (!dataLoaded || !isLoggedIn || userRole !== 'mother') return;
     localStorage.setItem('flowers_maternal_profile', JSON.stringify(profile));
-    apiPut(`/api/profile/${USER_ID}`, profile);
-  }, [profile, dataLoaded, isLoggedIn]);
+
+    // Convert PassportProfile back to relational schema fields
+    const primaryEC = profile.medical.emergencyContactName ? {
+      emergencyContactName: profile.medical.emergencyContactName,
+      emergencyContactPhone: profile.medical.emergencyContactPhone,
+      emergencyContactRelation: profile.medical.emergencyContactRelation,
+    } : {};
+
+    apiPut(`/api/mother-profile/${USER_ID}`, {
+      fullName: profile.personal.name,
+      dateOfBirth: profile.personal.dob,
+      phone: profile.personal.phone,
+      heightCm: profile.personal.height,
+      weightKg: profile.personal.weight,
+      bloodType: profile.medical.bloodType,
+      allergies: profile.medical.allergies,
+      existingConditions: profile.medical.existingConditions,
+      currentMedications: profile.medical.currentMedications,
+      edd: profile.pregnancy.edd,
+      gravida: profile.pregnancy.gravida,
+      para: profile.pregnancy.para,
+      ...primaryEC,
+    });
+  }, [profile, dataLoaded, isLoggedIn, userRole]);
 
   // Sync records to MySQL + localStorage
   useEffect(() => {
@@ -256,15 +348,56 @@ export default function App() {
       ...prev,
       personal: { ...prev.personal, name: motherName }
     }));
+    setUserRole('mother');
     setIsLoggedIn(true);
     localStorage.setItem('flowers_is_logged_in', 'true');
-    // Persist the updated profile to both localStorage and MySQL
+    localStorage.setItem('flowers_user_role', 'mother');
     const updated = {
       ...profile,
       personal: { ...profile.personal, name: motherName }
     };
     localStorage.setItem('flowers_maternal_profile', JSON.stringify(updated));
-    apiPut(`/api/profile/${USER_ID}`, updated).catch(() => {});
+
+    // Save to new endpoint
+    apiPut(`/api/mother-profile/${USER_ID}`, {
+      fullName: motherName,
+    }).catch(() => {});
+  };
+
+  const handleDoctorLoginSuccess = (email: string, role: 'doctor' | 'hospital_admin') => {
+    // Extract doctor name from email (e.g., "dr.sophy@hospital.com" → "Dr. Sophy")
+    const nameParts = email.split('@')[0].split('.');
+    const name = nameParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+
+    setDoctorEmail(email);
+    setDoctorName(name);
+    setUserRole(role);
+    setIsLoggedIn(true);
+    localStorage.setItem('flowers_is_logged_in', 'true');
+    localStorage.setItem('flowers_user_role', role);
+    localStorage.setItem('flowers_doctor_email', email);
+    localStorage.setItem('flowers_doctor_name', name);
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserRole(null);
+    setHasCompletedSetup(false);
+    setProfile(DEFAULT_PROFILE);
+    setRecords(DEFAULT_RECORDS);
+    setAppointments(DEFAULT_APPOINTMENTS);
+    setDoctorEmail('');
+    setDoctorName('');
+    setSelectedPatientId(null);
+    setDoctorView('dashboard');
+    localStorage.removeItem('flowers_is_logged_in');
+    localStorage.removeItem('flowers_user_role');
+    localStorage.removeItem('flowers_doctor_email');
+    localStorage.removeItem('flowers_doctor_name');
+    localStorage.removeItem('flowers_pregnancy_setup_completed');
+    localStorage.removeItem('flowers_maternal_profile');
+    localStorage.removeItem('flowers_medical_records');
+    localStorage.removeItem('flowers_maternal_appointments');
   };
 
   const handleSetupComplete = useCallback((setupData: {
@@ -275,11 +408,13 @@ export default function App() {
     para: number;
     bloodType: string;
   }) => {
+    // Calculate EDD client-side for immediate UI
     const today = new Date();
     const daysRemaining = (40 - setupData.weeks) * 7;
     const eddDate = new Date(today.getTime() + daysRemaining * 24 * 60 * 60 * 1000);
     const eddString = eddDate.toISOString().split('T')[0];
 
+    // Update local PassportProfile state for immediate UI
     const updated: PassportProfile = {
       ...profile,
       personal: {
@@ -301,24 +436,216 @@ export default function App() {
 
     setProfile(updated);
     localStorage.setItem('flowers_maternal_profile', JSON.stringify(updated));
-    apiPut(`/api/profile/${USER_ID}`, updated).catch(() => {});
+
+    // Save to new relational tables via setup endpoint
+    apiPut(`/api/mother-profile/${USER_ID}/setup`, {
+      weeks: setupData.weeks,
+      height: setupData.height,
+      weight: setupData.weight,
+      gravida: setupData.gravida,
+      para: setupData.para,
+      bloodType: setupData.bloodType,
+    }).catch((err) => console.error('Setup save failed:', err));
+
     setHasCompletedSetup(true);
     localStorage.setItem('flowers_pregnancy_setup_completed', 'true');
   }, [profile]);
 
   const t = TRANSLATIONS[lang];
 
-  // Auth gates
+  // ========================================================
+  // ROLE-BASED ROUTING & CONDITIONAL RENDER
+  // ========================================================
+
+  // 1. NO LOGIN — show role selector or login view
   if (!isLoggedIn) {
+    if (loginMode === 'doctor') {
+      return (
+        <DoctorLoginView
+          lang={lang}
+          setLang={setLang}
+          onLoginSuccess={handleDoctorLoginSuccess}
+          onSwitchToMotherLogin={() => setLoginMode('mother')}
+        />
+      );
+    }
     return (
-      <LoginView
-        lang={lang}
-        setLang={setLang}
-        onLoginSuccess={handleLoginSuccess}
-      />
+      <div className="min-h-screen bg-[#FEFAFB]">
+        <LoginView
+          lang={lang}
+          setLang={setLang}
+          onLoginSuccess={handleLoginSuccess}
+          onSwitchToDoctorLogin={() => setLoginMode('doctor')}
+        />
+      </div>
     );
   }
 
+  // 2. DOCTOR / HOSPITAL ADMIN VIEW
+  if (userRole === 'doctor' || userRole === 'hospital_admin') {
+    // Mock patient data — in production, fetch from API
+    const mockPatients = [
+      {
+        motherProfile: {
+          id: 'mother-001',
+          userId: 'user-001',
+          fullName: 'Sophy Cheat',
+          dateOfBirth: '1998-05-15',
+          phone: '+855-97-123-4567',
+          heightCm: 158,
+          weightKg: 52,
+          languagePref: 'kh' as const
+        },
+        pregnancyProfile: {
+          id: 'preg-001',
+          motherProfileId: 'mother-001',
+          edd: '2026-11-20',
+          lmp: '2026-02-13',
+          gravida: 1,
+          para: 0,
+          currentWeek: 28,
+          trimester: 3
+        },
+        sharingPermission: {
+          id: 'share-001',
+          motherProfileId: 'mother-001',
+          doctorProfileId: 'doctor-001',
+          grantedAt: new Date().toISOString(),
+          recordTypesGranted: ['ultrasound', 'lab_test', 'doctor_note']
+        },
+        recordCount: 8,
+        lastRecordDate: '2026-08-25',
+        nextAppointmentDate: '2026-09-08'
+      }
+    ];
+
+    // Doctor Dashboard
+    if (doctorView === 'dashboard') {
+      return (
+        <div className={`min-h-screen bg-[#FEFAFB] ${lang === 'kh' ? 'lang-kh' : ''}`}>
+          <div className="fixed top-4 right-4 z-50 flex items-center space-x-2">
+            <button
+              onClick={() => setLang(lang === 'en' ? 'kh' : 'en')}
+              className="px-3 py-1.5 rounded-full text-xs font-black bg-[#AEE3D8]/30 hover:bg-[#AEE3D8]/60 text-[#2F6F8F] transition-all cursor-pointer border border-[#AEE3D8] shadow-3xs"
+            >
+              {lang === 'en' ? 'KH' : 'EN'}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 rounded-full text-xs font-black bg-[#FDDEEC] hover:bg-[#F4A6B5] text-[#FA6B90] transition-all cursor-pointer border border-[#FA6B90] shadow-3xs flex items-center space-x-1"
+            >
+              <LogOut className="w-3 h-3" />
+              <span>{lang === 'en' ? 'Logout' : 'ចាកចេញ'}</span>
+            </button>
+          </div>
+
+          <DoctorDashboard
+            doctorId="doctor-001"
+            doctorName={doctorName}
+            patients={mockPatients}
+            onSelectPatient={(motherProfileId) => {
+              setSelectedPatientId(motherProfileId);
+              setDoctorView('patient-detail');
+            }}
+            lang={lang}
+          />
+        </div>
+      );
+    }
+
+    // Doctor Patient Detail
+    if (doctorView === 'patient-detail' && selectedPatientId) {
+      const patient = mockPatients.find(p => p.motherProfile.id === selectedPatientId);
+      if (!patient) return null;
+
+      return (
+        <div className={`min-h-screen bg-[#FEFAFB] ${lang === 'kh' ? 'lang-kh' : ''}`}>
+          <div className="fixed top-4 right-4 z-50 flex items-center space-x-2">
+            <button
+              onClick={() => setLang(lang === 'en' ? 'kh' : 'en')}
+              className="px-3 py-1.5 rounded-full text-xs font-black bg-[#AEE3D8]/30 hover:bg-[#AEE3D8]/60 text-[#2F6F8F] transition-all cursor-pointer border border-[#AEE3D8] shadow-3xs"
+            >
+              {lang === 'en' ? 'KH' : 'EN'}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 rounded-full text-xs font-black bg-[#FDDEEC] hover:bg-[#F4A6B5] text-[#FA6B90] transition-all cursor-pointer border border-[#FA6B90] shadow-3xs flex items-center space-x-1"
+            >
+              <LogOut className="w-3 h-3" />
+              <span>{lang === 'en' ? 'Logout' : 'ចាកចេញ'}</span>
+            </button>
+          </div>
+
+          <DoctorPatientDetail
+            motherProfile={patient.motherProfile}
+            pregnancyProfile={patient.pregnancyProfile}
+            medicalInfo={{
+              id: 'med-001',
+              motherProfileId: patient.motherProfile.id,
+              bloodType: 'O+',
+              allergies: 'Penicillin',
+              existingConditions: 'Gestational diabetes',
+              currentMedications: 'Iron supplement'
+            }}
+            emergencyContacts={[
+              {
+                id: 'em-001',
+                motherProfileId: patient.motherProfile.id,
+                name: 'Husband Name',
+                phone: '+855-97-123-4567',
+                relation: 'Spouse',
+                isPrimary: true
+              }
+            ]}
+            records={records}
+            appointments={appointments}
+            onBack={() => setDoctorView('dashboard')}
+            onViewRecords={() => setDoctorView('patient-records')}
+            lang={lang}
+          />
+        </div>
+      );
+    }
+
+    // Doctor Records View
+    if (doctorView === 'patient-records' && selectedPatientId) {
+      const patient = mockPatients.find(p => p.motherProfile.id === selectedPatientId);
+      if (!patient) return null;
+
+      return (
+        <div className={`min-h-screen bg-[#FEFAFB] ${lang === 'kh' ? 'lang-kh' : ''}`}>
+          <div className="fixed top-4 right-4 z-50 flex items-center space-x-2">
+            <button
+              onClick={() => setLang(lang === 'en' ? 'kh' : 'en')}
+              className="px-3 py-1.5 rounded-full text-xs font-black bg-[#AEE3D8]/30 hover:bg-[#AEE3D8]/60 text-[#2F6F8F] transition-all cursor-pointer border border-[#AEE3D8] shadow-3xs"
+            >
+              {lang === 'en' ? 'KH' : 'EN'}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 rounded-full text-xs font-black bg-[#FDDEEC] hover:bg-[#F4A6B5] text-[#FA6B90] transition-all cursor-pointer border border-[#FA6B90] shadow-3xs flex items-center space-x-1"
+            >
+              <LogOut className="w-3 h-3" />
+              <span>{lang === 'en' ? 'Logout' : 'ចាកចេញ'}</span>
+            </button>
+          </div>
+
+          <DoctorRecordsView
+            motherName={patient.motherProfile.fullName}
+            records={records}
+            onBack={() => setDoctorView('patient-detail')}
+            onAddClinicalNote={(recordId, note) => {
+              console.log(`Clinical note added to ${recordId}: ${note}`);
+              // TODO: Call API to save clinical note
+            }}
+            lang={lang}
+          />
+        </div>
+      );
+    }
+  }
+
+  // 3. MOTHER VIEW — requires setup completion
   if (!hasCompletedSetup) {
     return (
       <PregnancySetupWizard
@@ -329,14 +656,26 @@ export default function App() {
     );
   }
 
+  // 4. MOTHER MAIN APP
   return (
     <div className={`min-h-screen bg-[#FEFAFB] flex flex-col font-sans ${lang === 'kh' ? 'lang-kh' : ''}`} id="app-root-container">
-      {/* 1. PERSISTENT HEADER WITH FLOWER BRANDING & SOS */}
+      {/* PERSISTENT HEADER */}
       <Header
         lang={lang}
         setLang={setLang}
         onOpenEmergency={() => setEmergencyOpen(true)}
       />
+
+      {/* Add Logout button to header — TODO: integrate into Header component */}
+      <div className="fixed top-4 right-4 z-40">
+        <button
+          onClick={handleLogout}
+          className="px-3 py-1.5 rounded-full text-xs font-black bg-[#FDDEEC] hover:bg-[#F4A6B5] text-[#FA6B90] transition-all cursor-pointer border border-[#FA6B90] shadow-3xs flex items-center space-x-1"
+        >
+          <LogOut className="w-3 h-3" />
+          <span>{lang === 'en' ? 'Logout' : 'ចាកចេញ'}</span>
+        </button>
+      </div>
 
       {/* 2. CORE DISPLAY CONTAINER (FOCUSED MOBILE/TABLET VIEWPORT) */}
       <main className="flex-1 w-full max-w-md mx-auto bg-[#FEFAFB] pb-24 min-h-[calc(100vh-60px)] px-4 py-4 relative border-x border-[#AEE3D8]/50">
