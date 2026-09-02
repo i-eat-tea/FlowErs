@@ -114,16 +114,21 @@ export interface MedicalRecord {
 
 export interface Appointment {
   id: string;
-  motherProfileId: string;
+  userId?: string;
+  motherProfileId?: string;
   title?: string;
-  apptDate: string;      // YYYY-MM-DD
-  apptTime: string;      // HH:MM
+  date?: string;         // YYYY-MM-DD
+  time?: string;         // HH:MM
+  apptDate?: string;     // YYYY-MM-DD (compatibility alias)
+  apptTime?: string;     // HH:MM (compatibility alias)
   hospital: string;
-  doctor: string;
-  notes: string;
+  doctor?: string;
+  notes?: string;
   type: AppointmentType;
   reminder?: ReminderOption;
   completed: boolean;
+  imageAttachment?: string;
+  createdAt?: string;
 }
 
 // ─── Table 8: doctor_profiles ─────────────────────────────────────────────────

@@ -59,7 +59,13 @@ export default function HomeView({
   const nextAppointment = useMemo(() => {
     const upcoming = appointments
       .filter(a => !a.completed)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .map(a => ({
+        ...a,
+        date: (a.date || a.apptDate || '').split('T')[0],
+        time: (a.time || a.apptTime || '00:00').slice(0, 5),
+      }))
+      .filter(a => a.date)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
     return upcoming.length > 0 ? upcoming[0] : null;
   }, [appointments]);
 

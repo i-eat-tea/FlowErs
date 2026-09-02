@@ -1,5 +1,5 @@
 /**
- * Final fix - add missing user_id to appointments table
+ * Migration script to align appointments table with current schema
  * Run: node fix-appointments-table.js
  */
 
@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function fixAppointments() {
-  console.log('🔧 Fixing appointments table...\n');
+  console.log('🔧 Fixing appointments table schema...\n');
 
   const connection = await mysql.createConnection({
     host: process.env.MYSQL_HOST || 'localhost',
@@ -20,82 +20,91 @@ async function fixAppointments() {
   });
 
   try {
-    // Check current structure
-    console.log('📋 Current appointments table columns:');
+    // 1. Inspect current columns
     const [cols] = await connection.execute('DESCRIBE appointments');
+    const columnMap = new Map(cols.map(c => [c.Field, c]));
+    console.log('📋 Current columns:');
     console.table(cols);
 
-    const columnNames = cols.map(c => c.Field);
-
-    // Add user_id if missing
-    if (!columnNames.includes('user_id')) {
+    // 2. Add user_id if missing
+    if (!columnMap.has('user_id')) {
       console.log('\n1️⃣ Adding user_id column...');
       await connection.execute(`
         ALTER TABLE appointments
         ADD COLUMN user_id VARCHAR(36) NOT NULL AFTER id
       `);
-      console.log('✅ user_id added');
+      console.log('   ✅ user_id column added.');
     } else {
-      console.log('\n✅ user_id already exists');
+      console.log('\n✅ user_id column already exists.');
     }
 
-    // Add mother_profile_id if missing
-    if (!columnNames.includes('mother_profile_id')) {
-      console.log('\n2️⃣ Adding mother_profile_id column...');
+    // 3. Make mother_profile_id nullable if it was NOT NULL
+    if (columnMap.has('mother_profile_id')) {
+      console.log('\n2️⃣ Ensuring mother_profile_id is nullable...');
       await connection.execute(`
         ALTER TABLE appointments
-        ADD COLUMN mother_profile_id VARCHAR(36) AFTER user_id
+        MODIFY COLUMN mother_profile_id VARCHAR(36) NULL
       `);
-      console.log('✅ mother_profile_id added');
-    } else {
-      console.log('\n✅ mother_profile_id already exists');
+      console.log('   ✅ mother_profile_id is now nullable.');
     }
 
-    // Rename appt_date to date if needed
-    if (columnNames.includes('appt_date') && !columnNames.includes('date')) {
-      console.log('\n3️⃣ Renaming appt_date to date...');
+    // 4. Rename appt_date to date
+    if (columnMap.has('appt_date') && !columnMap.has('date')) {
+      console.log('\n3️⃣ Renaming appt_date → date...');
       await connection.execute(`
         ALTER TABLE appointments
         CHANGE COLUMN appt_date date DATE
       `);
-      console.log('✅ Renamed appt_date → date');
-    } else if (columnNames.includes('date')) {
-      console.log('\n✅ date column already exists');
+      console.log('   ✅ Renamed appt_date → date.');
+    } else if (columnMap.has('date')) {
+      console.log('\n✅ date column already exists.');
     }
 
-    // Rename appt_time to time if needed
-    if (columnNames.includes('appt_time') && !columnNames.includes('time')) {
-      console.log('\n4️⃣ Renaming appt_time to time...');
+    // 5. Rename appt_time to time
+    if (columnMap.has('appt_time') && !columnMap.has('time')) {
+      console.log('\n4️⃣ Renaming appt_time → time...');
       await connection.execute(`
         ALTER TABLE appointments
         CHANGE COLUMN appt_time time TIME
       `);
-      console.log('✅ Renamed appt_time → time');
-    } else if (columnNames.includes('time')) {
-      console.log('\n✅ time column already exists');
+      console.log('   ✅ Renamed appt_time → time.');
+    } else if (columnMap.has('time')) {
+      console.log('\n✅ time column already exists.');
     }
 
-    // Add image_attachment if missing
-    if (!columnNames.includes('image_attachment')) {
+    // 6. Add image_attachment if missing
+    if (!columnMap.has('image_attachment')) {
       console.log('\n5️⃣ Adding image_attachment column...');
       await connection.execute(`
         ALTER TABLE appointments
         ADD COLUMN image_attachment LONGTEXT AFTER completed
       `);
-      console.log('✅ image_attachment added');
+      console.log('   ✅ image_attachment column added.');
     } else {
-      console.log('\n✅ image_attachment already exists');
+      console.log('\n✅ image_attachment already exists.');
     }
 
-    console.log('\n✅ Appointments table fixed!\n');
+    // 7. Add created_at if missing
+    if (!columnMap.has('created_at')) {
+      console.log('\n6️⃣ Adding created_at column...');
+      await connection.execute(`
+        ALTER TABLE appointments
+        ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      `);
+      console.log('   ✅ created_at column added.');
+    } else {
+      console.log('\n✅ created_at already exists.');
+    }
 
-    // Verify
+    console.log('\n🎉 Appointments table successfully updated!\n');
+
+    // 7. Verify updated columns
     console.log('📋 Updated appointments table:');
-    const [newCols] = await connection.execute('DESCRIBE appointments');
-    console.table(newCols);
+    const [updatedCols] = await connection.execute('DESCRIBE appointments');
+    console.table(updatedCols);
 
   } catch (err) {
-    console.error('❌ Error:', err.message);
+    console.error('❌ Migration error:', err.message);
     process.exit(1);
   } finally {
     await connection.end();

@@ -380,7 +380,7 @@ export default function DoctorPatientDetail({
                 </p>
               </div>
               <p className="text-xs font-semibold text-[#2F6F8F]">
-                {upcomingAppt.apptDate} @ {upcomingAppt.apptTime}
+                {upcomingAppt.date || upcomingAppt.apptDate} { (upcomingAppt.time || upcomingAppt.apptTime) ? `@ ${upcomingAppt.time || upcomingAppt.apptTime}` : ''}
               </p>
               <p className="text-[10px] text-[#2F6F8F]/75 font-medium">
                 {upcomingAppt.hospital} {upcomingAppt.doctor && `• Dr. ${upcomingAppt.doctor}`}

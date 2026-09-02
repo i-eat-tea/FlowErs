@@ -12,14 +12,6 @@ Pregnant women manage many physical medical documents across multiple clinics an
 
 ---
 
-<<<<<<< HEAD
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
-   
-=======
 ## Target Users
 
 | Segment | Description |
@@ -207,13 +199,15 @@ Base URL: `http://localhost:3000`
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/health` | Health check — reports DB connection status |
-| `GET` | `/api/profile/:userId` | Get a mother's passport profile |
-| `PUT` | `/api/profile/:userId` | Upsert a mother's profile |
+| `GET` | `/api/mother-profile/:userId` | Get structured maternal & pregnancy profile |
+| `PUT` | `/api/mother-profile/:userId` | Update maternal & pregnancy profile |
 | `GET` | `/api/records/:userId` | List medical records for a user |
+| `GET` | `/api/records/:userId/:recordId` | Get single medical record detail |
 | `POST` | `/api/records` | Create a medical record |
 | `PUT` | `/api/records/:id` | Update a medical record |
 | `DELETE` | `/api/records/:id` | Delete a medical record |
 | `GET` | `/api/appointments/:userId` | List appointments for a user |
+| `GET` | `/api/appointments/:userId/:appointmentId` | Get single appointment detail |
 | `POST` | `/api/appointments` | Create an appointment |
 | `PUT` | `/api/appointments/:id` | Update an appointment |
 | `DELETE` | `/api/appointments/:id` | Delete an appointment |
@@ -260,4 +254,3 @@ All three tables link back to `profiles.user_id` with `ON DELETE CASCADE`.
 ## License
 
 Apache-2.0
->>>>>>> 0000596029ab226bcdd04d3ae067f8ce127e6a6a

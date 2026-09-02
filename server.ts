@@ -68,6 +68,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  dateStrings: true,
 });
 
 // ─── Helper: ensure profile row exists for a user ────────────────────────────
@@ -894,32 +895,126 @@ app.delete('/api/records/:id', async (req, res) => {
 app.get('/api/appointments/:userId', async (req, res) => {
   try {
     const [rows] = await pool.execute<RowDataPacket[]>(
-      `SELECT id, user_id, title, date, time, hospital, doctor, notes,
-              completed, type, reminder, image_attachment, created_at
-       FROM appointments
-       WHERE user_id = ?
-       ORDER BY date ASC`,
+      `SELECT * FROM appointments WHERE user_id = ?`,
       [req.params.userId],
     );
-    const appointments = rows.map(row => ({
-      id: row.id,
-      userId: row.user_id,
-      title: row.title,
-      date: row.date,
-      time: row.time,
-      hospital: row.hospital,
-      doctor: row.doctor,
-      notes: row.notes,
-      completed: !!row.completed,
-      type: row.type,
-      reminder: row.reminder,
-      imageAttachment: row.image_attachment,
-      createdAt: row.created_at,
-    }));
+    const appointments = rows.map(row => {
+      const rawDate = row.date !== undefined ? row.date : row.appt_date;
+      const rawTime = row.time !== undefined ? row.time : row.appt_time;
+      const rawImage = row.image_attachment !== undefined ? row.image_attachment : row.imageAttachment;
+
+      let formattedDate = '';
+      if (rawDate instanceof Date) {
+        const y = rawDate.getFullYear();
+        const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+        const d = String(rawDate.getDate()).padStart(2, '0');
+        formattedDate = `${y}-${m}-${d}`;
+      } else if (typeof rawDate === 'string') {
+        formattedDate = rawDate.split('T')[0];
+      } else if (rawDate) {
+        formattedDate = String(rawDate);
+      }
+
+      let formattedTime = '';
+      if (typeof rawTime === 'string') {
+        formattedTime = rawTime.slice(0, 5);
+      } else if (rawTime) {
+        formattedTime = String(rawTime);
+      }
+
+      return {
+        id: row.id,
+        userId: row.user_id || row.userId,
+        motherProfileId: row.mother_profile_id || row.motherProfileId,
+        title: row.title || '',
+        date: formattedDate,
+        time: formattedTime,
+        apptDate: formattedDate, // Compatibility alias
+        apptTime: formattedTime, // Compatibility alias
+        hospital: row.hospital || '',
+        doctor: row.doctor || '',
+        notes: row.notes || '',
+        completed: !!row.completed,
+        type: row.type || 'Other',
+        reminder: row.reminder || 'none',
+        imageAttachment: rawImage || null,
+        createdAt: row.created_at || null,
+      };
+    });
+
+    // In-memory sort by date and time
+    appointments.sort((a, b) => {
+      return a.date.localeCompare(b.date) || a.time.localeCompare(b.time);
+    });
+
     res.json(appointments);
   } catch (err: any) {
     console.error('GET /api/appointments error:', err.message);
-    res.status(500).json({ error: 'Database error' });
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// GET /api/appointments/:userId/:appointmentId
+// Fetch a single appointment by ID
+app.get('/api/appointments/:userId/:appointmentId', async (req, res) => {
+  try {
+    const { userId, appointmentId } = req.params;
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT * FROM appointments WHERE id = ? AND user_id = ?`,
+      [appointmentId, userId],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+
+    const row = rows[0];
+    const rawDate = row.date !== undefined ? row.date : row.appt_date;
+    const rawTime = row.time !== undefined ? row.time : row.appt_time;
+    const rawImage = row.image_attachment !== undefined ? row.image_attachment : row.imageAttachment;
+
+    let formattedDate = '';
+    if (rawDate instanceof Date) {
+      const y = rawDate.getFullYear();
+      const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+      const d = String(rawDate.getDate()).padStart(2, '0');
+      formattedDate = `${y}-${m}-${d}`;
+    } else if (typeof rawDate === 'string') {
+      formattedDate = rawDate.split('T')[0];
+    } else if (rawDate) {
+      formattedDate = String(rawDate);
+    }
+
+    let formattedTime = '';
+    if (typeof rawTime === 'string') {
+      formattedTime = rawTime.slice(0, 5);
+    } else if (rawTime) {
+      formattedTime = String(rawTime);
+    }
+
+    const appointment = {
+      id: row.id,
+      userId: row.user_id || row.userId,
+      motherProfileId: row.mother_profile_id || row.motherProfileId,
+      title: row.title || '',
+      date: formattedDate,
+      time: formattedTime,
+      apptDate: formattedDate,
+      apptTime: formattedTime,
+      hospital: row.hospital || '',
+      doctor: row.doctor || '',
+      notes: row.notes || '',
+      completed: !!row.completed,
+      type: row.type || 'Other',
+      reminder: row.reminder || 'none',
+      imageAttachment: rawImage || null,
+      createdAt: row.created_at || null,
+    };
+
+    res.json(appointment);
+  } catch (err: any) {
+    console.error('GET /api/appointments/:userId/:appointmentId error:', err.message);
+    res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
 
@@ -927,34 +1022,71 @@ app.get('/api/appointments/:userId', async (req, res) => {
 app.post('/api/appointments', async (req, res) => {
   try {
     const {
-      id, userId, title, date, time, hospital, doctor,
-      notes, completed, type, reminder, imageAttachment,
+      id, userId, title, date, apptDate, time, apptTime, hospital, doctor,
+      notes, completed, type, reminder, imageAttachment, image_attachment,
     } = req.body;
+
+    const rawDate = date || apptDate;
+    const rawTime = time || apptTime;
+    const rawImage = imageAttachment !== undefined ? imageAttachment : image_attachment;
+
+    // Validation
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+    if (!rawDate) {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+    const validTypes = ['ANC', 'Ultrasound', 'Blood Test', 'Vaccine', 'Specialist', 'Other'];
+    if (type && !validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid appointment type' });
+    }
+    const validReminders = ['1_week', '3_days', '1_day', 'same_day', 'custom', 'none'];
+    if (reminder && !validReminders.includes(reminder)) {
+      return res.status(400).json({ error: 'Invalid reminder option' });
+    }
+
+    // Resolve userId -> motherProfileId for relational linking
+    let motherProfileId: string | null = null;
+    if (userId) {
+      const [motherRows] = await pool.execute<RowDataPacket[]>(
+        'SELECT id FROM mother_profiles WHERE user_id = ?',
+        [userId],
+      );
+      if (motherRows.length > 0) {
+        motherProfileId = motherRows[0].id;
+      }
+    }
+
+    const apptId = id || generateId('appt');
+    const finalDate = typeof rawDate === 'string' ? rawDate.split('T')[0] : rawDate;
+    const finalTime = rawTime ? (typeof rawTime === 'string' ? rawTime.slice(0, 5) : rawTime) : null;
 
     await pool.execute<ResultSetHeader>(
       `INSERT INTO appointments
-        (id, user_id, title, date, time, hospital, doctor, notes,
+        (id, user_id, mother_profile_id, title, date, time, hospital, doctor, notes,
          completed, type, reminder, image_attachment)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        id,
+        apptId,
         userId,
-        title ?? null,
-        date,
-        time ?? null,
-        hospital ?? null,
-        doctor ?? null,
-        notes ?? null,
+        motherProfileId,
+        title ? title.trim() : null,
+        finalDate,
+        finalTime,
+        hospital ? hospital.trim() : null,
+        doctor ? doctor.trim() : null,
+        notes ? notes.trim() : null,
         completed ?? false,
         type ?? 'Other',
         reminder ?? 'none',
-        imageAttachment ?? null,
+        rawImage ?? null,
       ],
     );
-    res.status(201).json({ success: true, id });
+    res.status(201).json({ success: true, id: apptId, motherProfileId });
   } catch (err: any) {
     console.error('POST /api/appointments error:', err.message);
-    res.status(500).json({ error: 'Database error' });
+    res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
 
@@ -962,34 +1094,62 @@ app.post('/api/appointments', async (req, res) => {
 app.put('/api/appointments/:id', async (req, res) => {
   try {
     const {
-      title, date, time, hospital, doctor,
-      notes, completed, type, reminder, imageAttachment,
+      title, date, apptDate, time, apptTime, hospital, doctor,
+      notes, completed, type, reminder, imageAttachment, image_attachment,
     } = req.body;
+
+    // Validation
+    if (type) {
+      const validTypes = ['ANC', 'Ultrasound', 'Blood Test', 'Vaccine', 'Specialist', 'Other'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ error: 'Invalid appointment type' });
+      }
+    }
+    if (reminder) {
+      const validReminders = ['1_week', '3_days', '1_day', 'same_day', 'custom', 'none'];
+      if (!validReminders.includes(reminder)) {
+        return res.status(400).json({ error: 'Invalid reminder option' });
+      }
+    }
+
+    const rawDate = date !== undefined ? date : apptDate;
+    const rawTime = time !== undefined ? time : apptTime;
+    const rawImage = imageAttachment !== undefined ? imageAttachment : image_attachment;
+
+    const parsedDate = rawDate !== undefined ? (rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : rawDate) : null) : undefined;
+    const parsedTime = rawTime !== undefined ? (rawTime ? (typeof rawTime === 'string' ? rawTime.slice(0, 5) : rawTime) : null) : undefined;
 
     await pool.execute<ResultSetHeader>(
       `UPDATE appointments SET
-        title = ?, date = ?, time = ?, hospital = ?, doctor = ?,
-        notes = ?, completed = ?, type = ?, reminder = ?,
-        image_attachment = ?
+        title = COALESCE(?, title),
+        date = COALESCE(?, date),
+        time = COALESCE(?, time),
+        hospital = COALESCE(?, hospital),
+        doctor = COALESCE(?, doctor),
+        notes = COALESCE(?, notes),
+        completed = COALESCE(?, completed),
+        type = COALESCE(?, type),
+        reminder = COALESCE(?, reminder),
+        image_attachment = COALESCE(?, image_attachment)
        WHERE id = ?`,
       [
-        title ?? null,
-        date ?? null,
-        time ?? null,
-        hospital ?? null,
-        doctor ?? null,
-        notes ?? null,
-        completed ?? false,
-        type ?? 'Other',
-        reminder ?? 'none',
-        imageAttachment ?? null,
+        title !== undefined ? (title ? title.trim() : null) : null,
+        parsedDate !== undefined ? parsedDate : null,
+        parsedTime !== undefined ? parsedTime : null,
+        hospital !== undefined ? (hospital ? hospital.trim() : null) : null,
+        doctor !== undefined ? (doctor ? doctor.trim() : null) : null,
+        notes !== undefined ? (notes ? notes.trim() : null) : null,
+        completed !== undefined ? completed : null,
+        type ?? null,
+        reminder ?? null,
+        rawImage !== undefined ? rawImage : null,
         req.params.id,
       ],
     );
-    res.json({ success: true });
+    res.json({ success: true, message: 'Appointment updated successfully' });
   } catch (err: any) {
     console.error('PUT /api/appointments error:', err.message);
-    res.status(500).json({ error: 'Database error' });
+    res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
 
@@ -1003,7 +1163,7 @@ app.delete('/api/appointments/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     console.error('DELETE /api/appointments error:', err.message);
-    res.status(500).json({ error: 'Database error' });
+    res.status(500).json({ error: 'Database error', details: err.message });
   }
 });
 

@@ -196,12 +196,6 @@ export default function App() {
             emergencyContactPhone: ec?.phone || '',
           },
         };
-
-        // CRITICAL FIX: If pregnancy_profile exists, setup is complete!
-        if (pp && pp.edd) {
-          setHasCompletedSetup(true);
-          localStorage.setItem('flowers_pregnancy_setup_completed', 'true');
-        }
       } else {
         // Fall back to old JSON blob endpoint
         dbProfile = await apiGet<PassportProfile>(`/api/profile/${userId}`);
@@ -211,6 +205,18 @@ export default function App() {
         apiGet<MedicalRecord[]>(`/api/records/${userId}`),
         apiGet<Appointment[]>(`/api/appointments/${userId}`),
       ]);
+
+      const pp = motherProfileData?.pregnancyProfile;
+      // CRITICAL FIX: If pregnancy_profile exists, or we have medical records or appointments or edd, setup is complete!
+      if (
+        (pp && pp.edd) ||
+        (dbProfile?.pregnancy?.edd) ||
+        (dbRecords && dbRecords.length > 0) ||
+        (dbAppointments && dbAppointments.length > 0)
+      ) {
+        setHasCompletedSetup(true);
+        localStorage.setItem('flowers_pregnancy_setup_completed', 'true');
+      }
 
       if (dbProfile) {
         setProfile(dbProfile);
@@ -322,12 +328,17 @@ export default function App() {
     await apiPost('/api/appointments', { ...newAppt, userId });
   }, [userId]);
 
+  const handleUpdateAppointment = useCallback(async (updatedAppt: Appointment) => {
+    setAppointments(prev => prev.map(a => a.id === updatedAppt.id ? updatedAppt : a));
+    await apiPut(`/api/appointments/${updatedAppt.id}`, updatedAppt);
+  }, []);
+
   const handleToggleAppointmentComplete = useCallback(async (id: string) => {
     const appt = appointments.find(a => a.id === id);
     if (!appt) return;
     const updated = { ...appt, completed: !appt.completed };
     setAppointments(prev => prev.map(a => a.id === id ? updated : a));
-    await apiPut(`/api/appointments/${id}`, updated);
+    await apiPut(`/api/appointments/${id}`, { completed: updated.completed });
   }, [appointments]);
 
   const handleDeleteAppointment = useCallback(async (id: string) => {
@@ -350,6 +361,7 @@ export default function App() {
     // CRITICAL: Store the actual user ID from the server
     localStorage.setItem('flowers_user_id', serverUserId);
     setUserId(serverUserId); // Update state immediately
+    setDataLoaded(false); // Reset data loaded to trigger fresh DB load
 
     setProfile(prev => ({
       ...prev,
@@ -738,6 +750,7 @@ export default function App() {
           <AppointmentsView
             appointments={appointments}
             onAddAppointment={handleAddAppointment}
+            onUpdateAppointment={handleUpdateAppointment}
             onToggleComplete={handleToggleAppointmentComplete}
             onDeleteAppointment={handleDeleteAppointment}
             lang={lang}

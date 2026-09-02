@@ -15,6 +15,7 @@ import { TRANSLATIONS } from '../data';
 interface AppointmentsViewProps {
   appointments: Appointment[];
   onAddAppointment: (appt: Appointment) => void;
+  onUpdateAppointment?: (appt: Appointment) => void;
   onToggleComplete: (id: string) => void;
   onDeleteAppointment: (id: string) => void;
   lang: 'en' | 'kh';
@@ -59,6 +60,12 @@ function formatDateToISO(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// Safely normalize any date input to YYYY-MM-DD string
+function normalizeApptDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return '';
+  return String(dateStr).split('T')[0];
+}
+
 // Convert numbers to Khmer numerals
 function toKhmerNumber(num: number | string): string {
   const khmerDigits = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
@@ -68,6 +75,7 @@ function toKhmerNumber(num: number | string): string {
 export default function AppointmentsView({
   appointments,
   onAddAppointment,
+  onUpdateAppointment,
   onToggleComplete,
   onDeleteAppointment,
   lang
@@ -79,7 +87,6 @@ export default function AppointmentsView({
 
   // Currently navigated Year/Month in Month View (default to September 2026 or current active date)
   const [currentDate, setCurrentDate] = useState(() => {
-    // Check if there are appointments in Sept 2026, default around 2026-09-01
     return new Date(2026, 8, 1); // September 2026
   });
 
@@ -105,10 +112,12 @@ export default function AppointmentsView({
   const appointmentsByDate = useMemo(() => {
     const map: Record<string, Appointment[]> = {};
     for (const appt of appointments) {
-      if (!map[appt.date]) {
-        map[appt.date] = [];
+      const d = normalizeApptDate(appt.date || appt.apptDate);
+      if (!d) continue;
+      if (!map[d]) {
+        map[d] = [];
       }
-      map[appt.date].push(appt);
+      map[d].push({ ...appt, date: d });
     }
     return map;
   }, [appointments]);
@@ -117,14 +126,29 @@ export default function AppointmentsView({
   const upcomingAppointments = useMemo(() => {
     return appointments
       .filter(a => !a.completed)
-      .sort((a, b) => new Date(`${a.date}T${a.time || '00:00'}`).getTime() - new Date(`${b.date}T${b.time || '00:00'}`).getTime());
+      .map(a => ({ ...a, date: normalizeApptDate(a.date || a.apptDate) }))
+      .sort((a, b) => {
+        const timeA = a.time || a.apptTime || '00:00';
+        const timeB = b.time || b.apptTime || '00:00';
+        return a.date.localeCompare(b.date) || timeA.localeCompare(timeB);
+      });
   }, [appointments]);
 
   const completedAppointments = useMemo(() => {
     return appointments
       .filter(a => a.completed)
-      .sort((a, b) => new Date(`${b.date}T${b.time || '00:00'}`).getTime() - new Date(`${a.date}T${a.time || '00:00'}`).getTime());
+      .map(a => ({ ...a, date: normalizeApptDate(a.date || a.apptDate) }))
+      .sort((a, b) => {
+        const timeA = a.time || a.apptTime || '00:00';
+        const timeB = b.time || b.apptTime || '00:00';
+        return b.date.localeCompare(a.date) || timeB.localeCompare(timeA);
+      });
   }, [appointments]);
+
+  // Next upcoming checkup
+  const nextAppt = useMemo(() => {
+    return upcomingAppointments.length > 0 ? upcomingAppointments[0] : null;
+  }, [upcomingAppointments]);
 
   // Appointments on currently selected date
   const selectedDateAppointments = useMemo(() => {
@@ -252,8 +276,8 @@ export default function AppointmentsView({
   const handleOpenEditModal = (appt: Appointment) => {
     setEditingApptId(appt.id);
     setFormTitle(appt.title || '');
-    setFormDate(appt.date);
-    setFormTime(appt.time || '09:00');
+    setFormDate(normalizeApptDate(appt.date));
+    setFormTime(appt.time ? (typeof appt.time === 'string' ? appt.time.slice(0, 5) : '09:00') : '09:00');
     setHospital(appt.hospital);
     setDoctor(appt.doctor || '');
     setType(appt.type);
@@ -271,24 +295,32 @@ export default function AppointmentsView({
 
     if (editingApptId) {
       // Edit existing
-      onDeleteAppointment(editingApptId);
+      const existing = appointments.find(a => a.id === editingApptId);
       const updatedAppt: Appointment = {
         id: editingApptId,
+        motherProfileId: existing?.motherProfileId || '',
         title: formTitle.trim() || defaultTitle,
         date: formDate,
         time: formTime,
         hospital: formHospital.trim(),
         doctor: formDoctor.trim() || (lang === 'en' ? 'Attending Healthcare Provider' : 'គ្រូពេទ្យពិនិត្យ'),
         notes: formNotes.trim(),
-        completed: false,
+        completed: existing?.completed ?? false,
         type: formType,
         reminder: formReminder
       };
-      onAddAppointment(updatedAppt);
+
+      if (onUpdateAppointment) {
+        onUpdateAppointment(updatedAppt);
+      } else {
+        onDeleteAppointment(editingApptId);
+        onAddAppointment(updatedAppt);
+      }
     } else {
       // Create new
       const newAppt: Appointment = {
         id: `appt-${Date.now()}`,
+        motherProfileId: '',
         title: formTitle.trim() || defaultTitle,
         date: formDate,
         time: formTime,
@@ -409,6 +441,36 @@ export default function AppointmentsView({
 
   </div>
 </div>
+
+      {/* QUICK STATS SUMMARY */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white border border-[#FDDEEC] rounded-2xl p-2.5 shadow-3xs flex flex-col justify-between">
+          <span className="text-[9px] font-bold text-[#FA6B90] uppercase tracking-wider truncate">
+            {lang === 'en' ? 'Next Visit' : 'ការណាត់បន្ទាប់'}
+          </span>
+          <span className="text-xs font-black text-[#2F6F8F] font-heading truncate mt-1">
+            {nextAppt ? nextAppt.date : (lang === 'en' ? 'None' : 'គ្មាន')}
+          </span>
+        </div>
+
+        <div className="bg-white border border-[#AEE3D8] rounded-2xl p-2.5 shadow-3xs flex flex-col justify-between">
+          <span className="text-[9px] font-bold text-[#2F6F8F] uppercase tracking-wider truncate">
+            {lang === 'en' ? 'Upcoming' : 'ខាងមុខ'}
+          </span>
+          <span className="text-sm font-black text-[#2F6F8F] font-heading mt-1">
+            {lang === 'kh' ? toKhmerNumber(upcomingAppointments.length) : upcomingAppointments.length}
+          </span>
+        </div>
+
+        <div className="bg-white border border-[#7ECBBF] rounded-2xl p-2.5 shadow-3xs flex flex-col justify-between">
+          <span className="text-[9px] font-bold text-[#7BAE9B] uppercase tracking-wider truncate">
+            {lang === 'en' ? 'Attended' : 'បានពិនិត្យ'}
+          </span>
+          <span className="text-sm font-black text-[#7BAE9B] font-heading mt-1">
+            {lang === 'kh' ? toKhmerNumber(completedAppointments.length) : completedAppointments.length}
+          </span>
+        </div>
+      </div>
 
       {/* 2. MAIN CALENDAR CARD (MONTHLY OR WEEKLY) */}
       <div className="bg-white rounded-[24px] border-2 border-[#AEE3D8] p-3 sm:p-4 shadow-2xs space-y-3.5">
