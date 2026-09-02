@@ -111,20 +111,45 @@ export default function DoctorRecordsView({
   const filteredRecords = useMemo(() => {
     return records
       .filter(record => {
-        if (activeCategory !== 'all' && record.category !== activeCategory) return false;
-        if (activeTrimester !== 'all' && record.trimester !== activeTrimester) return false;
+        // Category filter
+        if (activeCategory !== 'all') {
+          const recCat = (record.category || '').toLowerCase().replace(/[\s-]/g, '_');
+          const targetCat = activeCategory.toLowerCase().replace(/[\s-]/g, '_');
+          if (recCat !== targetCat) {
+            return false;
+          }
+        }
+        // Trimester filter
+        if (activeTrimester !== 'all') {
+          let recTrimester = record.trimester;
+          if (recTrimester == null && record.week != null) {
+            const w = Number(record.week);
+            recTrimester = (w <= 12 ? 1 : w <= 27 ? 2 : 3) as 1 | 2 | 3;
+          }
+          if (Number(recTrimester) !== Number(activeTrimester)) {
+            return false;
+          }
+        }
+        // Search query
         if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          return (
-            record.title.toLowerCase().includes(q) ||
-            record.facility?.toLowerCase().includes(q) ||
-            record.doctor?.toLowerCase().includes(q) ||
-            record.notes?.toLowerCase().includes(q)
-          );
+          const q = searchQuery.toLowerCase().trim();
+          const matchTitle = (record.title || '').toLowerCase().includes(q);
+          const matchFacility = (record.facility || '').toLowerCase().includes(q);
+          const matchDoctor = (record.doctor || '').toLowerCase().includes(q);
+          const matchNotes = (record.notes || '').toLowerCase().includes(q);
+          const tagsArray = Array.isArray(record.tags)
+            ? record.tags
+            : (typeof record.tags === 'string' ? [record.tags] : []);
+          const matchTags = tagsArray.some(tag => String(tag).toLowerCase().includes(q));
+          return matchTitle || matchFacility || matchDoctor || matchNotes || matchTags;
         }
         return true;
       })
-      .sort((a, b) => new Date(b.examDate).getTime() - new Date(a.examDate).getTime());
+      .sort((a, b) => {
+        const dateA = a.examDate || a.date || a.createdAt || '';
+        const dateB = b.examDate || b.date || b.createdAt || '';
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      });
   }, [records, activeCategory, activeTrimester, searchQuery]);
 
   const handleSaveNote = () => {
@@ -175,7 +200,7 @@ export default function DoctorRecordsView({
           {/* Trimester Filter */}
           <select
             value={activeTrimester}
-            onChange={(e) => setActiveTrimester(e.target.value as any)}
+            onChange={(e) => setActiveTrimester(e.target.value === 'all' ? 'all' : (Number(e.target.value) as 1 | 2 | 3))}
             className="px-3 py-2.5 bg-white rounded-xl border border-[#FDDEEC] focus:ring-2 focus:ring-[#FA6B90] text-sm font-bold text-[#2F6F8F]"
           >
             <option value="all">{t.filterAll}</option>
@@ -229,7 +254,7 @@ export default function DoctorRecordsView({
                       {record.title}
                     </h3>
                     <div className="flex items-center flex-wrap gap-2 text-xs text-[#2F6F8F]/70 font-semibold">
-                      <span>{record.examDate}</span>
+                      <span>{record.examDate || record.date}</span>
                       <span>•</span>
                       <span>{t.week} {record.week}</span>
                       {record.facility && (
@@ -304,8 +329,14 @@ export default function DoctorRecordsView({
                     )}
 
                     {/* Attachment */}
-                    {record.imageUrl ? (
-                      <button className="w-full px-3 py-2 rounded-xl bg-[#AEE3D8]/30 hover:bg-[#AEE3D8]/60 text-[#2F6F8F] border border-[#AEE3D8] font-bold text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1">
+                    {(record.imageUrl || record.imageAttachment) ? (
+                      <button
+                        onClick={() => {
+                          const src = record.imageUrl || record.imageAttachment;
+                          if (src) window.open(src, '_blank');
+                        }}
+                        className="w-full px-3 py-2 rounded-xl bg-[#AEE3D8]/30 hover:bg-[#AEE3D8]/60 text-[#2F6F8F] border border-[#AEE3D8] font-bold text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1"
+                      >
                         <Eye className="w-3.5 h-3.5" />
                         <span>{t.viewAttachment}</span>
                       </button>

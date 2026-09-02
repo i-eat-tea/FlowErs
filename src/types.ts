@@ -168,6 +168,17 @@ export interface SharingPermission {
   recordTypesGranted?: RecordCategory[];
 }
 
+export interface PatientSummary {
+  motherProfile: MotherProfile;
+  pregnancyProfile: PregnancyProfile;
+  sharingPermission: SharingPermission;
+  recordCount: number;
+  lastRecordDate?: string;
+  nextAppointmentDate?: string;
+  medicalInfo?: MotherMedicalInfo;
+  emergencyContacts?: EmergencyContact[];
+}
+
 // ─── Table 11: family_members ─────────────────────────────────────────────────
 
 export interface FamilyMember {

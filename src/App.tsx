@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Home, FileText, Calendar, User, Plus, Camera, Flower2, LogOut } from 'lucide-react';
 
 // Data and Types
-import { PassportProfile, MedicalRecord, Appointment, UserRole, MotherProfile, PregnancyProfile, MedicalRecord as NewMedicalRecord } from './types';
+import { PassportProfile, MedicalRecord, Appointment, UserRole, MotherProfile, PregnancyProfile, MedicalRecord as NewMedicalRecord, PatientSummary } from './types';
 import {
   DEFAULT_PROFILE,
   DEFAULT_RECORDS,
@@ -49,29 +49,39 @@ async function apiGet<T>(path: string): Promise<T | null> {
   }
 }
 
-async function apiPost(path: string, body: unknown): Promise<boolean> {
+async function apiPost<T = any>(path: string, body: unknown): Promise<T | null> {
   try {
     const res = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    return res.ok;
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return (await res.json()) as T;
+    }
+    return (await res.text()) as unknown as T;
   } catch {
-    return false;
+    return null;
   }
 }
 
-async function apiPut(path: string, body: unknown): Promise<boolean> {
+async function apiPut<T = any>(path: string, body: unknown): Promise<T | null> {
   try {
     const res = await fetch(path, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    return res.ok;
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return (await res.json()) as T;
+    }
+    return (await res.text()) as unknown as T;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -120,6 +130,10 @@ export default function App() {
 
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [doctorView, setDoctorView] = useState<'dashboard' | 'patient-detail' | 'patient-records'>('dashboard');
+  const [doctorPatients, setDoctorPatients] = useState<PatientSummary[]>([]);
+  const [selectedPatientRecords, setSelectedPatientRecords] = useState<MedicalRecord[]>([]);
+  const [selectedPatientAppointments, setSelectedPatientAppointments] = useState<Appointment[]>([]);
+  const [isDoctorDataLoaded, setIsDoctorDataLoaded] = useState(false);
 
   // Active Tab: 4 MVP tabs strictly
   const [activeTab, setActiveTab] = useState<'home' | 'records' | 'calendar' | 'passport'>('home');
@@ -148,6 +162,22 @@ export default function App() {
 
   // Track whether data has been loaded from MySQL to avoid overwriting
   const [dataLoaded, setDataLoaded] = useState(false);
+
+  // ─── Load Doctor Patients from MySQL on mount (only for doctor/hospital_admin) ───
+
+  useEffect(() => {
+    if (!isLoggedIn || (userRole !== 'doctor' && userRole !== 'hospital_admin')) return;
+
+    async function loadDoctorPatients() {
+      const patients = await apiGet<PatientSummary[]>('/api/doctor/patients');
+      if (patients && Array.isArray(patients)) {
+        setDoctorPatients(patients);
+      }
+      setIsDoctorDataLoaded(true);
+    }
+
+    loadDoctorPatients();
+  }, [isLoggedIn, userRole]);
 
   // ─── Load data from MySQL on mount (only after login) ─────────────────────
 
@@ -392,11 +422,43 @@ export default function App() {
     setDoctorName(name);
     setUserRole(role);
     setIsLoggedIn(true);
+    setIsDoctorDataLoaded(false);
     localStorage.setItem('flowers_is_logged_in', 'true');
     localStorage.setItem('flowers_user_role', role);
     localStorage.setItem('flowers_doctor_email', email);
     localStorage.setItem('flowers_doctor_name', name);
   };
+
+  const handleSelectPatient = useCallback(async (motherProfileId: string) => {
+    setSelectedPatientId(motherProfileId);
+    setDoctorView('patient-detail');
+
+    // Fetch patient's records and appointments concurrently
+    const [patientRecords, patientAppts] = await Promise.all([
+      apiGet<MedicalRecord[]>(`/api/doctor/patient/${motherProfileId}/records`),
+      apiGet<Appointment[]>(`/api/doctor/patient/${motherProfileId}/appointments`),
+    ]);
+
+    if (patientRecords && Array.isArray(patientRecords)) {
+      setSelectedPatientRecords(patientRecords);
+    }
+    if (patientAppts && Array.isArray(patientAppts)) {
+      setSelectedPatientAppointments(patientAppts);
+    }
+  }, []);
+
+  const handleAddClinicalNote = useCallback(async (recordId: string, noteText: string) => {
+    const res = await apiPost<{ success: boolean; notes: string }>(`/api/doctor/records/${recordId}/notes`, {
+      note: noteText,
+      doctorName: doctorName || 'Attending Doctor',
+    });
+
+    if (res && res.notes) {
+      setSelectedPatientRecords(prev =>
+        prev.map(r => r.id === recordId ? { ...r, notes: res.notes } : r)
+      );
+    }
+  }, [doctorName]);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -410,6 +472,10 @@ export default function App() {
     setDoctorName('');
     setSelectedPatientId(null);
     setDoctorView('dashboard');
+    setDoctorPatients([]);
+    setSelectedPatientRecords([]);
+    setSelectedPatientAppointments([]);
+    setIsDoctorDataLoaded(false);
     setDataLoaded(false); // Reset data loaded state on logout
     localStorage.removeItem('flowers_is_logged_in');
     localStorage.removeItem('flowers_user_id'); // CRITICAL: Clear stored userId on logout
@@ -505,41 +571,18 @@ export default function App() {
 
   // 2. DOCTOR / HOSPITAL ADMIN VIEW
   if (userRole === 'doctor' || userRole === 'hospital_admin') {
-    // Mock patient data — in production, fetch from API
-    const mockPatients = [
-      {
-        motherProfile: {
-          id: 'mother-001',
-          userId: 'user-001',
-          fullName: 'Sophy Cheat',
-          dateOfBirth: '1998-05-15',
-          phone: '+855-97-123-4567',
-          heightCm: 158,
-          weightKg: 52,
-          languagePref: 'kh' as const
-        },
-        pregnancyProfile: {
-          id: 'preg-001',
-          motherProfileId: 'mother-001',
-          edd: '2026-11-20',
-          lmp: '2026-02-13',
-          gravida: 1,
-          para: 0,
-          currentWeek: 28,
-          trimester: 3
-        },
-        sharingPermission: {
-          id: 'share-001',
-          motherProfileId: 'mother-001',
-          doctorProfileId: 'doctor-001',
-          grantedAt: new Date().toISOString(),
-          recordTypesGranted: ['ultrasound', 'lab_test', 'doctor_note']
-        },
-        recordCount: 8,
-        lastRecordDate: '2026-08-25',
-        nextAppointmentDate: '2026-09-08'
-      }
-    ];
+    if (!isDoctorDataLoaded) {
+      return (
+        <div className="min-h-screen bg-[#FEFAFB] flex items-center justify-center">
+          <div className="text-center space-y-3">
+            <div className="w-12 h-12 border-4 border-[#2F6F8F] border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-sm font-black text-[#2F6F8F] font-heading">
+              {lang === 'en' ? 'Loading patient registry...' : 'កំពុងផ្ទុកបញ្ជីអ្នកជម្ងឺ...'}
+            </p>
+          </div>
+        </div>
+      );
+    }
 
     // Doctor Dashboard
     if (doctorView === 'dashboard') {
@@ -563,12 +606,9 @@ export default function App() {
 
           <DoctorDashboard
             doctorId="doctor-001"
-            doctorName={doctorName}
-            patients={mockPatients}
-            onSelectPatient={(motherProfileId) => {
-              setSelectedPatientId(motherProfileId);
-              setDoctorView('patient-detail');
-            }}
+            doctorName={doctorName || 'Doctor'}
+            patients={doctorPatients}
+            onSelectPatient={handleSelectPatient}
             lang={lang}
           />
         </div>
@@ -577,7 +617,7 @@ export default function App() {
 
     // Doctor Patient Detail
     if (doctorView === 'patient-detail' && selectedPatientId) {
-      const patient = mockPatients.find(p => p.motherProfile.id === selectedPatientId);
+      const patient = doctorPatients.find(p => p.motherProfile.id === selectedPatientId);
       if (!patient) return null;
 
       return (
@@ -601,26 +641,17 @@ export default function App() {
           <DoctorPatientDetail
             motherProfile={patient.motherProfile}
             pregnancyProfile={patient.pregnancyProfile}
-            medicalInfo={{
-              id: 'med-001',
+            medicalInfo={patient.medicalInfo || {
+              id: `med-${patient.motherProfile.id}`,
               motherProfileId: patient.motherProfile.id,
-              bloodType: 'O+',
-              allergies: 'Penicillin',
-              existingConditions: 'Gestational diabetes',
-              currentMedications: 'Iron supplement'
+              bloodType: '',
+              allergies: '',
+              existingConditions: '',
+              currentMedications: ''
             }}
-            emergencyContacts={[
-              {
-                id: 'em-001',
-                motherProfileId: patient.motherProfile.id,
-                name: 'Husband Name',
-                phone: '+855-97-123-4567',
-                relation: 'Spouse',
-                isPrimary: true
-              }
-            ]}
-            records={records}
-            appointments={appointments}
+            emergencyContacts={patient.emergencyContacts || []}
+            records={selectedPatientRecords}
+            appointments={selectedPatientAppointments}
             onBack={() => setDoctorView('dashboard')}
             onViewRecords={() => setDoctorView('patient-records')}
             lang={lang}
@@ -631,7 +662,7 @@ export default function App() {
 
     // Doctor Records View
     if (doctorView === 'patient-records' && selectedPatientId) {
-      const patient = mockPatients.find(p => p.motherProfile.id === selectedPatientId);
+      const patient = doctorPatients.find(p => p.motherProfile.id === selectedPatientId);
       if (!patient) return null;
 
       return (
@@ -654,12 +685,9 @@ export default function App() {
 
           <DoctorRecordsView
             motherName={patient.motherProfile.fullName}
-            records={records}
+            records={selectedPatientRecords}
             onBack={() => setDoctorView('patient-detail')}
-            onAddClinicalNote={(recordId, note) => {
-              console.log(`Clinical note added to ${recordId}: ${note}`);
-              // TODO: Call API to save clinical note
-            }}
+            onAddClinicalNote={handleAddClinicalNote}
             lang={lang}
           />
         </div>

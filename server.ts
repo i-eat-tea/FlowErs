@@ -672,6 +672,7 @@ app.get('/api/records/:userId', async (req, res) => {
       title: row.title,
       category: row.category,
       date: row.date,
+      examDate: row.date,
       week: row.week,
       trimester: row.trimester,
       facility: row.facility,
@@ -679,6 +680,7 @@ app.get('/api/records/:userId', async (req, res) => {
       notes: row.notes,
       status: row.status,
       imageAttachment: row.image_attachment,
+      imageUrl: row.image_attachment,
       tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,
       extractedData: typeof row.extracted_data === 'string'
         ? JSON.parse(row.extracted_data) : row.extracted_data,
@@ -718,6 +720,7 @@ app.get('/api/records/:userId/:recordId', async (req, res) => {
       title: row.title,
       category: row.category,
       date: row.date,
+      examDate: row.date,
       week: row.week,
       trimester: row.trimester,
       facility: row.facility,
@@ -725,6 +728,7 @@ app.get('/api/records/:userId/:recordId', async (req, res) => {
       notes: row.notes,
       status: row.status,
       imageAttachment: row.image_attachment,
+      imageUrl: row.image_attachment,
       tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,
       extractedData: typeof row.extracted_data === 'string'
         ? JSON.parse(row.extracted_data) : row.extracted_data,
@@ -1163,6 +1167,349 @@ app.delete('/api/appointments/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     console.error('DELETE /api/appointments error:', err.message);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// ─── Doctor Portal API ────────────────────────────────────────────────────────
+
+// GET /api/doctor/patients
+// Fetch list of all patients (mothers) with clinical summary
+app.get('/api/doctor/patients', async (req, res) => {
+  try {
+    // 1. Fetch all mother profiles
+    const [motherRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id, user_id, full_name, date_of_birth, phone, height_cm, pre_pregnancy_weight_kg, language_pref
+       FROM mother_profiles
+       ORDER BY full_name ASC`,
+    );
+
+    if (motherRows.length === 0) {
+      return res.json([]);
+    }
+
+    // 2. Fetch all pregnancy profiles
+    const [pregnancyRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id, mother_profile_id, edd, lmp, gravida, para, current_week, trimester
+       FROM pregnancy_profiles`,
+    );
+    const pregnancyMap = new Map(pregnancyRows.map(p => [p.mother_profile_id, p]));
+
+    // 3. Fetch all medical info
+    const [medicalRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id, mother_profile_id, blood_type, allergies, existing_conditions, current_medications
+       FROM mother_medical_info`,
+    );
+    const medicalMap = new Map(medicalRows.map(m => [m.mother_profile_id, m]));
+
+    // 4. Fetch all emergency contacts
+    const [contactRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id, mother_profile_id, name, phone, relation, is_primary
+       FROM emergency_contacts`,
+    );
+    const contactMap = new Map<string, any[]>();
+    for (const c of contactRows) {
+      if (!contactMap.has(c.mother_profile_id)) {
+        contactMap.set(c.mother_profile_id, []);
+      }
+      contactMap.get(c.mother_profile_id)!.push({
+        id: c.id,
+        motherProfileId: c.mother_profile_id,
+        name: c.name,
+        phone: c.phone,
+        relation: c.relation,
+        isPrimary: !!c.is_primary,
+      });
+    }
+
+    // 5. Fetch all medical records metadata (counts and latest date)
+    const [recordRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id, user_id, mother_profile_id, date, created_at FROM medical_records`,
+    );
+
+    // 6. Fetch all appointments metadata (upcoming date)
+    const [apptRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id, user_id, mother_profile_id, date, time, completed FROM appointments`,
+    );
+
+    // 7. Fetch sharing permissions if table exists
+    const sharingMap = new Map<string, any>();
+    try {
+      const [shareRows] = await pool.execute<RowDataPacket[]>(
+        `SELECT id, mother_profile_id, doctor_profile_id, granted_at, expires_at, record_types_granted
+         FROM sharing_permissions`,
+      );
+      for (const s of shareRows) {
+        sharingMap.set(s.mother_profile_id, s);
+      }
+    } catch {
+      // Table might not exist or be empty, handled gracefully
+    }
+
+    // Assemble patient summaries
+    const patients = motherRows.map(m => {
+      const p = pregnancyMap.get(m.id);
+      const med = medicalMap.get(m.id);
+      const contacts = contactMap.get(m.id) || [];
+      const userRecords = recordRows.filter(r => r.mother_profile_id === m.id || r.user_id === m.user_id);
+      const userAppts = apptRows.filter(a => a.mother_profile_id === m.id || a.user_id === m.user_id);
+
+      // Calculate dynamic week & trimester if EDD exists
+      let currentWeek = p?.current_week || 4;
+      let trimester: 1 | 2 | 3 = (p?.trimester as any) || 1;
+      let eddStr = '';
+      if (p?.edd) {
+        eddStr = p.edd instanceof Date ? p.edd.toISOString().split('T')[0] : String(p.edd).split('T')[0];
+        const eddDate = new Date(eddStr);
+        if (!isNaN(eddDate.getTime())) {
+          const diffDays = Math.ceil((eddDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+          const daysElapsed = 280 - (diffDays > 0 ? diffDays : 0);
+          currentWeek = Math.max(4, Math.min(Math.floor(daysElapsed / 7), 40));
+          if (currentWeek >= 13 && currentWeek <= 27) trimester = 2;
+          else if (currentWeek >= 28) trimester = 3;
+          else trimester = 1;
+        }
+      }
+
+      // Latest record date
+      let lastRecordDate: string | undefined = undefined;
+      if (userRecords.length > 0) {
+        const sorted = [...userRecords].sort((a, b) => String(b.date || b.created_at || '').localeCompare(String(a.date || a.created_at || '')));
+        const rawDate = sorted[0].date || sorted[0].created_at;
+        if (rawDate) {
+          lastRecordDate = rawDate instanceof Date ? rawDate.toISOString().split('T')[0] : String(rawDate).split('T')[0];
+        }
+      }
+
+      // Next appointment date
+      let nextAppointmentDate: string | undefined = undefined;
+      const upcoming = userAppts.filter(a => !a.completed);
+      if (upcoming.length > 0) {
+        const sorted = [...upcoming].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+        const rawDate = sorted[0].date;
+        if (rawDate) {
+          nextAppointmentDate = rawDate instanceof Date ? rawDate.toISOString().split('T')[0] : String(rawDate).split('T')[0];
+        }
+      }
+
+      const sp = sharingMap.get(m.id);
+
+      return {
+        motherProfile: {
+          id: m.id,
+          userId: m.user_id,
+          fullName: m.full_name || 'Mother',
+          dateOfBirth: m.date_of_birth ? (m.date_of_birth instanceof Date ? m.date_of_birth.toISOString().split('T')[0] : String(m.date_of_birth).split('T')[0]) : '',
+          phone: m.phone || '',
+          heightCm: m.height_cm ? parseFloat(m.height_cm) : undefined,
+          weightKg: m.pre_pregnancy_weight_kg ? parseFloat(m.pre_pregnancy_weight_kg) : undefined,
+          languagePref: m.language_pref || 'kh',
+        },
+        pregnancyProfile: {
+          id: p?.id || `preg-${m.id}`,
+          motherProfileId: m.id,
+          edd: eddStr || '2026-11-20',
+          lmp: p?.lmp ? String(p.lmp).split('T')[0] : undefined,
+          gravida: p?.gravida || 1,
+          para: p?.para || 0,
+          currentWeek,
+          trimester,
+        },
+        medicalInfo: {
+          id: med?.id || `med-${m.id}`,
+          motherProfileId: m.id,
+          bloodType: med?.blood_type || '',
+          allergies: med?.allergies || '',
+          existingConditions: med?.existing_conditions || '',
+          currentMedications: med?.current_medications || '',
+        },
+        emergencyContacts: contacts,
+        sharingPermission: {
+          id: sp?.id || `share-${m.id}`,
+          motherProfileId: m.id,
+          doctorProfileId: sp?.doctor_profile_id || 'doctor-001',
+          grantedAt: sp?.granted_at ? (sp.granted_at instanceof Date ? sp.granted_at.toISOString() : String(sp.granted_at)) : new Date().toISOString(),
+          expiresAt: sp?.expires_at ? (sp.expires_at instanceof Date ? sp.expires_at.toISOString() : String(sp.expires_at)) : undefined,
+          recordTypesGranted: (sp?.record_types_granted && typeof sp.record_types_granted === 'string')
+            ? JSON.parse(sp.record_types_granted)
+            : (sp?.record_types_granted || ['ultrasound', 'lab_test', 'prescription', 'vaccine', 'doctor_note']),
+        },
+        recordCount: userRecords.length,
+        lastRecordDate,
+        nextAppointmentDate,
+      };
+    });
+
+    res.json(patients);
+  } catch (err: any) {
+    console.error('GET /api/doctor/patients error:', err.message);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// GET /api/doctor/patient/:motherProfileId/records
+// Fetch records for a specific patient in doctor view
+app.get('/api/doctor/patient/:motherProfileId/records', async (req, res) => {
+  try {
+    const { motherProfileId } = req.params;
+
+    // Find mother's user_id
+    const [motherRows] = await pool.execute<RowDataPacket[]>(
+      'SELECT id, user_id FROM mother_profiles WHERE id = ?',
+      [motherProfileId],
+    );
+
+    const userId = motherRows.length > 0 ? motherRows[0].user_id : null;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id, user_id, mother_profile_id, title, category, date, week, trimester,
+              facility, doctor, notes, status, image_attachment,
+              tags, extracted_data, created_at
+       FROM medical_records
+       WHERE mother_profile_id = ? OR (user_id = ? AND user_id IS NOT NULL)
+       ORDER BY date DESC`,
+      [motherProfileId, userId],
+    );
+
+    const records = rows.map(row => {
+      let formattedDate = '';
+      if (row.date instanceof Date) {
+        formattedDate = row.date.toISOString().split('T')[0];
+      } else if (row.date) {
+        formattedDate = String(row.date).split('T')[0];
+      }
+
+      return {
+        id: row.id,
+        userId: row.user_id,
+        motherProfileId: row.mother_profile_id,
+        title: row.title,
+        category: row.category,
+        date: formattedDate,
+        examDate: formattedDate,
+        week: row.week,
+        trimester: row.trimester,
+        facility: row.facility,
+        doctor: row.doctor,
+        notes: row.notes,
+        status: row.status,
+        imageAttachment: row.image_attachment,
+        imageUrl: row.image_attachment,
+        tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,
+        extractedData: typeof row.extracted_data === 'string'
+          ? JSON.parse(row.extracted_data) : row.extracted_data,
+        createdAt: row.created_at,
+      };
+    });
+
+    res.json(records);
+  } catch (err: any) {
+    console.error('GET /api/doctor/patient/:motherProfileId/records error:', err.message);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// GET /api/doctor/patient/:motherProfileId/appointments
+// Fetch appointments for a specific patient in doctor view
+app.get('/api/doctor/patient/:motherProfileId/appointments', async (req, res) => {
+  try {
+    const { motherProfileId } = req.params;
+
+    // Find mother's user_id
+    const [motherRows] = await pool.execute<RowDataPacket[]>(
+      'SELECT id, user_id FROM mother_profiles WHERE id = ?',
+      [motherProfileId],
+    );
+
+    const userId = motherRows.length > 0 ? motherRows[0].user_id : null;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT * FROM appointments
+       WHERE mother_profile_id = ? OR (user_id = ? AND user_id IS NOT NULL)`,
+      [motherProfileId, userId],
+    );
+
+    const appointments = rows.map(row => {
+      const rawDate = row.date !== undefined ? row.date : row.appt_date;
+      const rawTime = row.time !== undefined ? row.time : row.appt_time;
+      const rawImage = row.image_attachment !== undefined ? row.image_attachment : row.imageAttachment;
+
+      let formattedDate = '';
+      if (rawDate instanceof Date) {
+        formattedDate = `${rawDate.getFullYear()}-${String(rawDate.getMonth() + 1).padStart(2, '0')}-${String(rawDate.getDate()).padStart(2, '0')}`;
+      } else if (rawDate) {
+        formattedDate = String(rawDate).split('T')[0];
+      }
+
+      let formattedTime = '';
+      if (typeof rawTime === 'string') {
+        formattedTime = rawTime.slice(0, 5);
+      } else if (rawTime) {
+        formattedTime = String(rawTime);
+      }
+
+      return {
+        id: row.id,
+        userId: row.user_id || row.userId,
+        motherProfileId: row.mother_profile_id || row.motherProfileId,
+        title: row.title || '',
+        date: formattedDate,
+        time: formattedTime,
+        apptDate: formattedDate,
+        apptTime: formattedTime,
+        hospital: row.hospital || '',
+        doctor: row.doctor || '',
+        notes: row.notes || '',
+        completed: !!row.completed,
+        type: row.type || 'Other',
+        reminder: row.reminder || 'none',
+        imageAttachment: rawImage || null,
+        createdAt: row.created_at || null,
+      };
+    });
+
+    appointments.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+    res.json(appointments);
+  } catch (err: any) {
+    console.error('GET /api/doctor/patient/:motherProfileId/appointments error:', err.message);
+    res.status(500).json({ error: 'Database error', details: err.message });
+  }
+});
+
+// POST /api/doctor/records/:recordId/notes
+// Add a clinical note to a patient's medical record
+app.post('/api/doctor/records/:recordId/notes', async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const { note, doctorName } = req.body;
+
+    if (!note || !note.trim()) {
+      return res.status(400).json({ error: 'Note text is required' });
+    }
+
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      'SELECT notes FROM medical_records WHERE id = ?',
+      [recordId],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+
+    const existingNotes = rows[0].notes || '';
+    const timestamp = new Date().toISOString().split('T')[0];
+    const drHeader = doctorName ? `Dr. ${doctorName}` : 'Attending Healthcare Provider';
+    const noteEntry = `\n\n📝 [Clinical Note by ${drHeader} - ${timestamp}]:\n${note.trim()}`;
+    const updatedNotes = (existingNotes + noteEntry).trim();
+
+    await pool.execute<ResultSetHeader>(
+      'UPDATE medical_records SET notes = ? WHERE id = ?',
+      [updatedNotes, recordId],
+    );
+
+    res.json({ success: true, notes: updatedNotes });
+  } catch (err: any) {
+    console.error('POST /api/doctor/records/:recordId/notes error:', err.message);
     res.status(500).json({ error: 'Database error', details: err.message });
   }
 });

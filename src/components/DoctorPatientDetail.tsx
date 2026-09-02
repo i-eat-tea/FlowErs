@@ -118,6 +118,7 @@ export default function DoctorPatientDetail({
   );
 
   const flowerStage = getFlowerForWeek(pregnancyProfile.currentWeek);
+  const derivedTrimester = pregnancyProfile.trimester || (pregnancyProfile.currentWeek <= 12 ? 1 : pregnancyProfile.currentWeek <= 27 ? 2 : 3);
   const primaryContact = emergencyContacts.find(c => c.isPrimary) || emergencyContacts[0];
   const upcomingAppt = appointments.find(a => !a.completed);
 
@@ -189,7 +190,7 @@ export default function DoctorPatientDetail({
                 {t.trimester}
               </p>
               <p className="text-lg font-black text-[#FA6B90] mt-1">
-                {pregnancyProfile.trimester} {lang === 'en' ? 'T' : 'ត'}
+                {derivedTrimester} {lang === 'en' ? 'T' : 'ត'}
               </p>
             </div>
 

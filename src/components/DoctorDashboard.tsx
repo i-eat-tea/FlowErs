@@ -104,8 +104,15 @@ export default function DoctorDashboard({
   const filteredPatients = useMemo(() => {
     return patients.filter(p => {
       // Trimester filter
-      if (filterTrimester !== 'all' && p.pregnancyProfile.trimester !== filterTrimester) {
-        return false;
+      if (filterTrimester !== 'all') {
+        let pTrimester = p.pregnancyProfile.trimester;
+        if (pTrimester == null && p.pregnancyProfile.currentWeek != null) {
+          const w = Number(p.pregnancyProfile.currentWeek);
+          pTrimester = (w <= 12 ? 1 : w <= 27 ? 2 : 3) as 1 | 2 | 3;
+        }
+        if (Number(pTrimester) !== Number(filterTrimester)) {
+          return false;
+        }
       }
       // Search filter
       if (searchQuery.trim()) {
@@ -121,7 +128,14 @@ export default function DoctorDashboard({
   // Calculate stats
   const stats = useMemo(() => {
     const total = patients.length;
-    const highRisk = patients.filter(p => p.pregnancyProfile.trimester === 3).length; // Simplified: T3 = high priority
+    const highRisk = patients.filter(p => {
+      let t = p.pregnancyProfile.trimester;
+      if (t == null && p.pregnancyProfile.currentWeek != null) {
+        const w = Number(p.pregnancyProfile.currentWeek);
+        t = (w <= 12 ? 1 : w <= 27 ? 2 : 3) as 1 | 2 | 3;
+      }
+      return Number(t) === 3;
+    }).length; // Simplified: T3 = high priority
     const upcomingAppts = patients.filter(p => p.nextAppointmentDate).length;
     return { total, highRisk, upcomingAppts };
   }, [patients]);
@@ -205,7 +219,7 @@ export default function DoctorDashboard({
           {/* Trimester Filter */}
           <select
             value={filterTrimester}
-            onChange={(e) => setFilterTrimester(e.target.value as any)}
+            onChange={(e) => setFilterTrimester(e.target.value === 'all' ? 'all' : (Number(e.target.value) as 1 | 2 | 3))}
             className="px-4 py-3 bg-white rounded-xl border border-[#FDDEEC] focus:ring-2 focus:ring-[#FA6B90] text-sm font-bold text-[#2F6F8F]"
             id="trimester-filter"
           >

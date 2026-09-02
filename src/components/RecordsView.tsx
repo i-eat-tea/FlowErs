@@ -56,33 +56,52 @@ export default function RecordsView({
     return records
       .filter(record => {
         // Category filter
-        if (activeCategory !== 'all' && record.category !== activeCategory) {
-          return false;
+        if (activeCategory !== 'all') {
+          const recCat = (record.category || '').toLowerCase().replace(/[\s-]/g, '_');
+          const targetCat = activeCategory.toLowerCase().replace(/[\s-]/g, '_');
+          if (recCat !== targetCat) {
+            return false;
+          }
         }
         // Trimester filter
-        if (activeTrimester !== 'all' && record.trimester !== activeTrimester) {
-          return false;
+        if (activeTrimester !== 'all') {
+          let recTrimester = record.trimester;
+          if (recTrimester == null && record.week != null) {
+            const w = Number(record.week);
+            recTrimester = (w <= 12 ? 1 : w <= 27 ? 2 : 3) as 1 | 2 | 3;
+          }
+          if (Number(recTrimester) !== Number(activeTrimester)) {
+            return false;
+          }
         }
         // Search query
         if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          const matchTitle = record.title.toLowerCase().includes(q);
-          const matchFacility = record.facility?.toLowerCase().includes(q);
-          const matchDoctor = record.doctor?.toLowerCase().includes(q);
-          const matchNotes = record.notes?.toLowerCase().includes(q);
-          const matchTags = record.tags?.some(tag => tag.toLowerCase().includes(q));
+          const q = searchQuery.toLowerCase().trim();
+          const matchTitle = (record.title || '').toLowerCase().includes(q);
+          const matchFacility = (record.facility || '').toLowerCase().includes(q);
+          const matchDoctor = (record.doctor || '').toLowerCase().includes(q);
+          const matchNotes = (record.notes || '').toLowerCase().includes(q);
+          const tagsArray = Array.isArray(record.tags)
+            ? record.tags
+            : (typeof record.tags === 'string' ? [record.tags] : []);
+          const matchTags = tagsArray.some(tag => String(tag).toLowerCase().includes(q));
           return matchTitle || matchFacility || matchDoctor || matchNotes || matchTags;
         }
         return true;
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => {
+        const dateA = a.date || a.examDate || a.createdAt || '';
+        const dateB = b.date || b.examDate || b.createdAt || '';
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      });
   }, [records, activeCategory, activeTrimester, searchQuery]);
 
   // Category counts
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: records.length };
     records.forEach(r => {
-      counts[r.category] = (counts[r.category] || 0) + 1;
+      const cat = (r.category || 'other').toLowerCase().replace(/[\s-]/g, '_');
+      counts[cat] = (counts[cat] || 0) + 1;
     });
     return counts;
   }, [records]);
@@ -263,7 +282,7 @@ export default function RecordsView({
                         {badge.label}
                       </span>
                       <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-[#FFF7E9] text-[#2F6F8F] font-mono border border-[#F6E5C3]">
-                        Week {record.week} (T{record.trimester})
+                        Week {record.week} (T{record.trimester != null ? record.trimester : (record.week ? (record.week <= 12 ? 1 : record.week <= 27 ? 2 : 3) : 1)})
                       </span>
                       {record.status && (
                         <span className={`text-[8.5px] font-black px-1.5 py-0.5 rounded ${
