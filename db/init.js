@@ -13,7 +13,7 @@ async function initDB() {
     multipleStatements: true,
   });
 
-  const sql = fs.readFileSync('./db/schema.sql', 'utf-8');
+  const sql = fs.readFileSync('./backend/schema.sql', 'utf-8');
   await connection.query(sql);
   console.log('✅ Database and tables created successfully.');
   await connection.end();

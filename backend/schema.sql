@@ -58,35 +58,42 @@ CREATE TABLE emergency_contacts (
 
 CREATE TABLE medical_records (
     id VARCHAR(36) PRIMARY KEY,
-    mother_profile_id VARCHAR(36) NOT NULL,
-    title VARCHAR(255),
-    category ENUM('ultrasound','lab_test','prescription','vaccine','doctor_note','other'),
-    exam_date DATE,
+    user_id VARCHAR(36) NOT NULL,
+    mother_profile_id VARCHAR(36),
+    title VARCHAR(255) NOT NULL,
+    category ENUM('ultrasound','lab_test','prescription','vaccine','doctor_note','other') NOT NULL,
+    date DATE,
     week INT,
     trimester INT,
     facility VARCHAR(255),
     doctor VARCHAR(255),
     notes TEXT,
-    image_url VARCHAR(500),
+    image_attachment LONGTEXT,
     status ENUM('Normal','Follow-up Needed','Completed','Pending') DEFAULT 'Normal',
     tags JSON,
+    extracted_data JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE SET NULL
 );
 
 CREATE TABLE appointments (
     id VARCHAR(36) PRIMARY KEY,
-    mother_profile_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    mother_profile_id VARCHAR(36),
     title VARCHAR(255),
-    appt_date DATE,
-    appt_time TIME,
+    date DATE,
+    time TIME,
     hospital VARCHAR(255),
     doctor VARCHAR(255),
     notes TEXT,
     type ENUM('ANC','Ultrasound','Blood Test','Vaccine','Specialist','Other'),
     reminder ENUM('1_week','3_days','1_day','same_day','custom','none') DEFAULT 'none',
     completed BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE CASCADE
+    image_attachment LONGTEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE SET NULL
 );
 
 CREATE TABLE doctor_profiles (

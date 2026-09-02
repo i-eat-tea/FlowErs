@@ -35,15 +35,9 @@ import DoctorRecordsView from './components/DoctorRecordsView';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function generateUserId(): string {
-  const stored = localStorage.getItem('flowers_user_id');
-  if (stored) return stored;
-  const id = 'user-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
-  localStorage.setItem('flowers_user_id', id);
-  return id;
+function getStoredUserId(): string {
+  return localStorage.getItem('flowers_user_id') || '';
 }
-
-const USER_ID = generateUserId();
 
 async function apiGet<T>(path: string): Promise<T | null> {
   try {
@@ -98,6 +92,9 @@ export default function App() {
 
   // Login Mode (Mother vs Doctor)
   const [loginMode, setLoginMode] = useState<'mother' | 'doctor'>('mother');
+
+  // User ID - dynamically loaded from localStorage
+  const [userId, setUserId] = useState<string>(() => getStoredUserId());
 
   // User Role & Authentication
   const [userRole, setUserRole] = useState<UserRole | null>(() => {
@@ -155,7 +152,7 @@ export default function App() {
   // ─── Load data from MySQL on mount (only after login) ─────────────────────
 
   useEffect(() => {
-    if (!isLoggedIn || userRole !== 'mother') return;
+    if (!isLoggedIn || userRole !== 'mother' || !userId) return;
 
     async function loadFromDB() {
       // Try new relational endpoint first, fall back to old JSON blob
@@ -164,7 +161,7 @@ export default function App() {
         pregnancyProfile: any;
         medicalInfo: any;
         emergencyContacts: any[];
-      }>(`/api/mother-profile/${USER_ID}`);
+      }>(`/api/mother-profile/${userId}`);
 
       let dbProfile: PassportProfile | null = null;
 
@@ -199,14 +196,20 @@ export default function App() {
             emergencyContactPhone: ec?.phone || '',
           },
         };
+
+        // CRITICAL FIX: If pregnancy_profile exists, setup is complete!
+        if (pp && pp.edd) {
+          setHasCompletedSetup(true);
+          localStorage.setItem('flowers_pregnancy_setup_completed', 'true');
+        }
       } else {
         // Fall back to old JSON blob endpoint
-        dbProfile = await apiGet<PassportProfile>(`/api/profile/${USER_ID}`);
+        dbProfile = await apiGet<PassportProfile>(`/api/profile/${userId}`);
       }
 
       const [dbRecords, dbAppointments] = await Promise.all([
-        apiGet<MedicalRecord[]>(`/api/records/${USER_ID}`),
-        apiGet<Appointment[]>(`/api/appointments/${USER_ID}`),
+        apiGet<MedicalRecord[]>(`/api/records/${userId}`),
+        apiGet<Appointment[]>(`/api/appointments/${userId}`),
       ]);
 
       if (dbProfile) {
@@ -225,12 +228,12 @@ export default function App() {
     }
 
     loadFromDB();
-  }, [isLoggedIn, userRole]);
+  }, [isLoggedIn, userRole, userId]);
 
   // ─── Sync profile to MySQL + localStorage ─────────────────────────────────
 
   useEffect(() => {
-    if (!dataLoaded || !isLoggedIn || userRole !== 'mother') return;
+    if (!dataLoaded || !isLoggedIn || userRole !== 'mother' || !userId) return;
     localStorage.setItem('flowers_maternal_profile', JSON.stringify(profile));
 
     // Convert PassportProfile back to relational schema fields
@@ -240,9 +243,9 @@ export default function App() {
       emergencyContactRelation: profile.medical.emergencyContactRelation,
     } : {};
 
-    apiPut(`/api/mother-profile/${USER_ID}`, {
+    apiPut(`/api/mother-profile/${userId}`, {
       fullName: profile.personal.name,
-      dateOfBirth: profile.personal.dob,
+      dateOfBirth: profile.personal.dob || null, // Convert empty string to null
       phone: profile.personal.phone,
       heightCm: profile.personal.height,
       weightKg: profile.personal.weight,
@@ -250,12 +253,12 @@ export default function App() {
       allergies: profile.medical.allergies,
       existingConditions: profile.medical.existingConditions,
       currentMedications: profile.medical.currentMedications,
-      edd: profile.pregnancy.edd,
+      edd: profile.pregnancy.edd || null, // Convert empty string to null
       gravida: profile.pregnancy.gravida,
       para: profile.pregnancy.para,
       ...primaryEC,
     });
-  }, [profile, dataLoaded, isLoggedIn, userRole]);
+  }, [profile, dataLoaded, isLoggedIn, userRole, userId]);
 
   // Sync records to MySQL + localStorage
   useEffect(() => {
@@ -306,8 +309,8 @@ export default function App() {
 
   const handleAddRecord = useCallback(async (newRecord: MedicalRecord) => {
     setRecords(prev => [newRecord, ...prev]);
-    await apiPost('/api/records', { ...newRecord, userId: USER_ID });
-  }, []);
+    await apiPost('/api/records', { ...newRecord, userId });
+  }, [userId]);
 
   const handleDeleteRecord = useCallback(async (id: string) => {
     setRecords(prev => prev.filter(r => r.id !== id));
@@ -316,8 +319,8 @@ export default function App() {
 
   const handleAddAppointment = useCallback(async (newAppt: Appointment) => {
     setAppointments(prev => [...prev, newAppt]);
-    await apiPost('/api/appointments', { ...newAppt, userId: USER_ID });
-  }, []);
+    await apiPost('/api/appointments', { ...newAppt, userId });
+  }, [userId]);
 
   const handleToggleAppointmentComplete = useCallback(async (id: string) => {
     const appt = appointments.find(a => a.id === id);
@@ -343,7 +346,11 @@ export default function App() {
 
   // ─── Auth Handlers ─────────────────────────────────────────────────────────
 
-  const handleLoginSuccess = (motherName: string) => {
+  const handleLoginSuccess = (motherName: string, serverUserId: string) => {
+    // CRITICAL: Store the actual user ID from the server
+    localStorage.setItem('flowers_user_id', serverUserId);
+    setUserId(serverUserId); // Update state immediately
+
     setProfile(prev => ({
       ...prev,
       personal: { ...prev.personal, name: motherName }
@@ -358,8 +365,8 @@ export default function App() {
     };
     localStorage.setItem('flowers_maternal_profile', JSON.stringify(updated));
 
-    // Save to new endpoint
-    apiPut(`/api/mother-profile/${USER_ID}`, {
+    // Save to new endpoint using the correct userId
+    apiPut(`/api/mother-profile/${serverUserId}`, {
       fullName: motherName,
     }).catch(() => {});
   };
@@ -382,6 +389,7 @@ export default function App() {
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUserRole(null);
+    setUserId(''); // Clear userId state
     setHasCompletedSetup(false);
     setProfile(DEFAULT_PROFILE);
     setRecords(DEFAULT_RECORDS);
@@ -390,7 +398,9 @@ export default function App() {
     setDoctorName('');
     setSelectedPatientId(null);
     setDoctorView('dashboard');
+    setDataLoaded(false); // Reset data loaded state on logout
     localStorage.removeItem('flowers_is_logged_in');
+    localStorage.removeItem('flowers_user_id'); // CRITICAL: Clear stored userId on logout
     localStorage.removeItem('flowers_user_role');
     localStorage.removeItem('flowers_doctor_email');
     localStorage.removeItem('flowers_doctor_name');
@@ -438,7 +448,7 @@ export default function App() {
     localStorage.setItem('flowers_maternal_profile', JSON.stringify(updated));
 
     // Save to new relational tables via setup endpoint
-    apiPut(`/api/mother-profile/${USER_ID}/setup`, {
+    apiPut(`/api/mother-profile/${userId}/setup`, {
       weeks: setupData.weeks,
       height: setupData.height,
       weight: setupData.weight,
@@ -449,7 +459,7 @@ export default function App() {
 
     setHasCompletedSetup(true);
     localStorage.setItem('flowers_pregnancy_setup_completed', 'true');
-  }, [profile]);
+  }, [profile, userId]);
 
   const t = TRANSLATIONS[lang];
 
@@ -646,6 +656,20 @@ export default function App() {
   }
 
   // 3. MOTHER VIEW — requires setup completion
+  // Show loading spinner while fetching from database to prevent wizard flickering
+  if (!dataLoaded) {
+    return (
+      <div className="min-h-screen bg-[#FEFAFB] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 border-4 border-[#FA6B90] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-black text-[#2F6F8F] font-heading">
+            {lang === 'en' ? 'Loading your health passport...' : 'កំពុងផ្ទុកទិន្នន័យសុខភាព...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!hasCompletedSetup) {
     return (
       <PregnancySetupWizard

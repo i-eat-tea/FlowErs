@@ -9,7 +9,7 @@ import { Flower2, Lock, User, Globe, Sparkles, AlertCircle, ShieldCheck, Stethos
 interface LoginViewProps {
   lang: 'en' | 'kh';
   setLang: (lang: 'en' | 'kh') => void;
-  onLoginSuccess: (name: string) => void;
+  onLoginSuccess: (name: string, userId: string) => void;
   onSwitchToDoctorLogin: () => void;
 }
 
@@ -86,7 +86,7 @@ export default function LoginView({ lang, setLang, onLoginSuccess, onSwitchToDoc
           localStorage.setItem('flowers_user_role', data.user.role);
 
           const userName = data.user.fullName || data.user.email.split('@')[0];
-          onLoginSuccess(userName);
+          onLoginSuccess(userName, data.user.id);
         } else {
           setError(
             lang === 'en'
@@ -119,7 +119,7 @@ export default function LoginView({ lang, setLang, onLoginSuccess, onSwitchToDoc
           localStorage.removeItem('flowers_pregnancy_setup_completed');
 
           const userName = data.user.fullName || fullName.trim() || data.user.email.split('@')[0];
-          onLoginSuccess(userName);
+          onLoginSuccess(userName, data.user.id);
         } else {
           setError(
             lang === 'en'

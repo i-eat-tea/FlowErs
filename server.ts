@@ -656,7 +656,7 @@ app.put('/api/mother-profile/:userId', async (req, res) => {
 app.get('/api/records/:userId', async (req, res) => {
   try {
     const [rows] = await pool.execute<RowDataPacket[]>(
-      `SELECT id, user_id, title, category, date, week, trimester,
+      `SELECT id, user_id, mother_profile_id, title, category, date, week, trimester,
               facility, doctor, notes, status, image_attachment,
               tags, extracted_data, created_at
        FROM medical_records
@@ -667,6 +667,7 @@ app.get('/api/records/:userId', async (req, res) => {
     const records = rows.map(row => ({
       id: row.id,
       userId: row.user_id,
+      motherProfileId: row.mother_profile_id,
       title: row.title,
       category: row.category,
       date: row.date,
@@ -689,6 +690,53 @@ app.get('/api/records/:userId', async (req, res) => {
   }
 });
 
+// GET /api/records/:userId/:recordId
+// Fetch a single record by ID (for edit form, detail view, etc.)
+app.get('/api/records/:userId/:recordId', async (req, res) => {
+  try {
+    const { userId, recordId } = req.params;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id, user_id, mother_profile_id, title, category, date, week, trimester,
+              facility, doctor, notes, status, image_attachment,
+              tags, extracted_data, created_at
+       FROM medical_records
+       WHERE id = ? AND user_id = ?`,
+      [recordId, userId],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+
+    const row = rows[0];
+    const record = {
+      id: row.id,
+      userId: row.user_id,
+      motherProfileId: row.mother_profile_id,
+      title: row.title,
+      category: row.category,
+      date: row.date,
+      week: row.week,
+      trimester: row.trimester,
+      facility: row.facility,
+      doctor: row.doctor,
+      notes: row.notes,
+      status: row.status,
+      imageAttachment: row.image_attachment,
+      tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,
+      extractedData: typeof row.extracted_data === 'string'
+        ? JSON.parse(row.extracted_data) : row.extracted_data,
+      createdAt: row.created_at,
+    };
+
+    res.json(record);
+  } catch (err: any) {
+    console.error('GET /api/records/:userId/:recordId error:', err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // POST /api/records
 app.post('/api/records', async (req, res) => {
   try {
@@ -698,29 +746,63 @@ app.post('/api/records', async (req, res) => {
       tags, extractedData,
     } = req.body;
 
+    // Validation
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!category) {
+      return res.status(400).json({ error: 'Category is required' });
+    }
+    const validCategories = ['ultrasound', 'lab_test', 'prescription', 'vaccine', 'doctor_note', 'other'];
+    if (!validCategories.includes(category)) {
+      return res.status(400).json({ error: 'Invalid category' });
+    }
+    if (week && (week < 1 || week > 42)) {
+      return res.status(400).json({ error: 'Week must be between 1 and 42' });
+    }
+
+    // Auto-calculate trimester if not provided
+    let finalTrimester = trimester;
+    if (week && !trimester) {
+      finalTrimester = week <= 12 ? 1 : week <= 27 ? 2 : 3;
+    }
+
+    // Resolve userId → motherProfileId for relational linking
+    let motherProfileId: string | null = null;
+    if (userId) {
+      const [motherRows] = await pool.execute<RowDataPacket[]>(
+        'SELECT id FROM mother_profiles WHERE user_id = ?',
+        [userId],
+      );
+      if (motherRows.length > 0) {
+        motherProfileId = motherRows[0].id;
+      }
+    }
+
     await pool.execute<ResultSetHeader>(
       `INSERT INTO medical_records
-        (id, user_id, title, category, date, week, trimester,
+        (id, user_id, mother_profile_id, title, category, date, week, trimester,
          facility, doctor, notes, status, image_attachment, tags, extracted_data)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         userId,
-        title,
+        motherProfileId,
+        title.trim(),
         category,
-        date,
+        date || null,
         week ?? null,
-        trimester ?? null,
+        finalTrimester ?? null,
         facility ?? null,
         doctor ?? null,
         notes ?? null,
-        status ?? null,
+        status ?? 'Normal',
         imageAttachment ?? null,
         tags ? JSON.stringify(tags) : null,
         extractedData ? JSON.stringify(extractedData) : null,
       ],
     );
-    res.status(201).json({ success: true, id });
+    res.status(201).json({ success: true, id, motherProfileId });
   } catch (err: any) {
     console.error('POST /api/records error:', err.message);
     res.status(500).json({ error: 'Database error' });
@@ -736,22 +818,56 @@ app.put('/api/records/:id', async (req, res) => {
       tags, extractedData,
     } = req.body;
 
+    // Validation
+    if (category) {
+      const validCategories = ['ultrasound', 'lab_test', 'prescription', 'vaccine', 'doctor_note', 'other'];
+      if (!validCategories.includes(category)) {
+        return res.status(400).json({ error: 'Invalid category' });
+      }
+    }
+    if (week !== undefined && week !== null && (week < 1 || week > 42)) {
+      return res.status(400).json({ error: 'Week must be between 1 and 42' });
+    }
+
+    // Auto-calculate trimester if week is provided but trimester is not
+    let finalTrimester = trimester;
+    if (week && trimester === undefined) {
+      finalTrimester = week <= 12 ? 1 : week <= 27 ? 2 : 3;
+    }
+
+    // Use COALESCE for partial updates (only update fields that are provided)
     await pool.execute<ResultSetHeader>(
       `UPDATE medical_records SET
-        title = ?, category = ?, date = ?, week = ?, trimester = ?,
-        facility = ?, doctor = ?, notes = ?, status = ?,
-        image_attachment = ?, tags = ?, extracted_data = ?
+        title = COALESCE(?, title),
+        category = COALESCE(?, category),
+        date = COALESCE(?, date),
+        week = COALESCE(?, week),
+        trimester = COALESCE(?, trimester),
+        facility = COALESCE(?, facility),
+        doctor = COALESCE(?, doctor),
+        notes = COALESCE(?, notes),
+        status = COALESCE(?, status),
+        image_attachment = COALESCE(?, image_attachment),
+        tags = COALESCE(?, tags),
+        extracted_data = COALESCE(?, extracted_data)
        WHERE id = ?`,
       [
-        title, category, date, week ?? null, trimester ?? null,
-        facility ?? null, doctor ?? null, notes ?? null, status ?? null,
+        title ?? null,
+        category ?? null,
+        date ?? null,
+        week ?? null,
+        finalTrimester ?? null,
+        facility ?? null,
+        doctor ?? null,
+        notes ?? null,
+        status ?? null,
         imageAttachment ?? null,
         tags ? JSON.stringify(tags) : null,
         extractedData ? JSON.stringify(extractedData) : null,
         req.params.id,
       ],
     );
-    res.json({ success: true });
+    res.json({ success: true, message: 'Record updated successfully' });
   } catch (err: any) {
     console.error('PUT /api/records error:', err.message);
     res.status(500).json({ error: 'Database error' });

@@ -162,7 +162,34 @@ Expected output: `🎉 ALL PROFILE TESTS PASSED!`
 
 ---
 
+## ✅ Option 2: Medical Records CRUD — COMPLETE!
+
+**Date:** 2026-09-02  
+**Status:** ✅ Backend Complete
+
+### What Was Built
+- Complete CRUD API for medical records (ultrasound, lab tests, prescriptions, vaccines, doctor notes)
+- Proper relational schema with `mother_profile_id` + `user_id` dual-key system
+- Input validation (required fields, category enum, week range 1-42)
+- Auto-trimester calculation from gestational week
+- Partial update support with SQL COALESCE
+- Single record fetch endpoint `GET /api/records/:userId/:recordId`
+- Base64 image storage for document scans
+- Extracted clinical data JSON support
+
+### API Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/records/:userId` | Fetch all records for a user |
+| `GET` | `/api/records/:userId/:recordId` | Fetch single record by ID |
+| `POST` | `/api/records` | Create new record (with validation) |
+| `PUT` | `/api/records/:recordId` | Update record (partial updates) |
+| `DELETE` | `/api/records/:recordId` | Delete record |
+
+See **[MEDICAL_RECORDS_API.md](./MEDICAL_RECORDS_API.md)** for full API documentation.
+
+---
+
 **Next Option to build:**
-- **Option 2:** Medical Records CRUD (upload ultrasound, lab results, prescriptions)
 - **Option 3:** Appointments & Checkups (calendar, reminders)
 - **Option 4:** Doctor Portal (view real patient records)
