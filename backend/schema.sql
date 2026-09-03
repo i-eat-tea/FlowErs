@@ -8,6 +8,8 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255),
     role ENUM('mother','doctor','hospital_admin','family') DEFAULT 'mother',
+    subscription_tier ENUM('free','basic','premium') DEFAULT 'free',
+    subscription_status ENUM('active','expired','pending') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

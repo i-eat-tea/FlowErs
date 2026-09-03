@@ -38,6 +38,8 @@ export interface User {
   email: string;
   passwordHash?: string;
   role: UserRole;
+  subscriptionTier: SubscriptionTier;
+  subscriptionStatus: SubscriptionStatus;
   createdAt: string;
   updatedAt: string;
 }

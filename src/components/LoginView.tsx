@@ -84,6 +84,7 @@ export default function LoginView({ lang, setLang, onLoginSuccess, onSwitchToDoc
           localStorage.setItem('flowers_user_id', data.user.id);
           localStorage.setItem('flowers_user_email', data.user.email);
           localStorage.setItem('flowers_user_role', data.user.role);
+          if (data.user.subscriptionTier) localStorage.setItem('flowers_subscription_tier', data.user.subscriptionTier);
 
           const userName = data.user.fullName || data.user.email.split('@')[0];
           onLoginSuccess(userName, data.user.id);
@@ -115,6 +116,7 @@ export default function LoginView({ lang, setLang, onLoginSuccess, onSwitchToDoc
           localStorage.setItem('flowers_user_id', data.user.id);
           localStorage.setItem('flowers_user_email', data.user.email);
           localStorage.setItem('flowers_user_role', data.user.role);
+          if (data.user.subscriptionTier) localStorage.setItem('flowers_subscription_tier', data.user.subscriptionTier);
           // New mother account starts with pregnancy setup wizard
           localStorage.removeItem('flowers_pregnancy_setup_completed');
 

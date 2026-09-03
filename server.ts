@@ -119,8 +119,8 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Insert user
     await pool.execute<ResultSetHeader>(
-      'INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)',
-      [userId, email.toLowerCase().trim(), passwordHash, role],
+      'INSERT INTO users (id, email, password_hash, role, subscription_tier, subscription_status) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, email.toLowerCase().trim(), passwordHash, role, 'free', 'pending'],
     );
 
     // If mother, create default mother_profile
@@ -144,6 +144,8 @@ app.post('/api/auth/register', async (req, res) => {
         email: email.toLowerCase().trim(),
         role,
         fullName,
+        subscriptionTier: 'free',
+        subscriptionStatus: 'pending',
       },
     });
   } catch (err: any) {
@@ -164,7 +166,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Find user by email
     const [users] = await pool.execute<RowDataPacket[]>(
-      'SELECT id, email, password_hash, role FROM users WHERE email = ?',
+      'SELECT id, email, password_hash, role, subscription_tier, subscription_status FROM users WHERE email = ?',
       [email.toLowerCase().trim()],
     );
 
@@ -223,6 +225,8 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id,
         email: user.email,
         role: user.role,
+        subscriptionTier: user.subscription_tier || 'free',
+        subscriptionStatus: user.subscription_status || 'pending',
         ...profileData,
       },
     });
@@ -1512,6 +1516,36 @@ app.post('/api/doctor/records/:recordId/notes', async (req, res) => {
     console.error('POST /api/doctor/records/:recordId/notes error:', err.message);
     res.status(500).json({ error: 'Database error', details: err.message });
   }
+});
+
+// ─── Family Members API ──────────────────────────────────────────────────────
+
+app.get('/api/family-members/:motherProfileId', async (req, res) => {
+  try {
+    const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM family_members WHERE mother_profile_id = ?', [req.params.motherProfileId]);
+    res.json(rows.map(r => ({ id: r.id, motherProfileId: r.mother_profile_id, name: r.name, phone: r.phone, relation: r.relation, canEdit: !!r.can_edit })));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/family-members', async (req, res) => {
+  try {
+    const { motherProfileId, name, phone, relation, canEdit } = req.body;
+    const id = 'fam-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+    await pool.execute('INSERT INTO family_members (id, mother_profile_id, name, phone, relation, can_edit) VALUES (?, ?, ?, ?, ?, ?)', [id, motherProfileId, name, phone, relation || 'Partner', !!canEdit]);
+    res.status(201).json({ success: true, id });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/family-members/:id', async (req, res) => {
+  try {
+    const { name, phone, relation, canEdit } = req.body;
+    await pool.execute('UPDATE family_members SET name = COALESCE(?, name), phone = COALESCE(?, phone), relation = COALESCE(?, relation), can_edit = COALESCE(?, can_edit) WHERE id = ?', [name || null, phone || null, relation || null, canEdit !== undefined ? !!canEdit : null, req.params.id]);
+    res.json({ success: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/family-members/:id', async (req, res) => {
+  try { await pool.execute('DELETE FROM family_members WHERE id = ?', [req.params.id]); res.json({ success: true }); } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 // ─── Health Check ─────────────────────────────────────────────────────────────

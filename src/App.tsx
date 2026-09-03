@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Home, FileText, Calendar, User, Plus, Camera, Flower2, LogOut } from 'lucide-react';
+import { Home, FileText, Calendar, User, Plus, Camera, Flower2, LogOut, Users } from 'lucide-react';
 
 // Data and Types
-import { PassportProfile, MedicalRecord, Appointment, UserRole, MotherProfile, PregnancyProfile, MedicalRecord as NewMedicalRecord, PatientSummary } from './types';
+import { PassportProfile, MedicalRecord, Appointment, UserRole, MotherProfile, PregnancyProfile, MedicalRecord as NewMedicalRecord, PatientSummary, SubscriptionTier } from './types';
 import {
   DEFAULT_PROFILE,
   DEFAULT_RECORDS,
@@ -26,6 +26,8 @@ import AddRecordModal from './components/AddRecordModal';
 import JourneySummaryReport from './components/JourneySummaryReport';
 import LoginView from './components/LoginView';
 import PregnancySetupWizard from './components/PregnancySetupWizard';
+import FamilyAccessView from './components/FamilyAccessView';
+import UpgradeModal from './components/UpgradeModal';
 
 // Components — Doctor
 import DoctorLoginView from './components/DoctorLoginView';
@@ -106,6 +108,9 @@ export default function App() {
   // User ID - dynamically loaded from localStorage
   const [userId, setUserId] = useState<string>(() => getStoredUserId());
 
+  const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier>(() => (localStorage.getItem('flowers_subscription_tier') as SubscriptionTier) || 'free');
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
   // User Role & Authentication
   const [userRole, setUserRole] = useState<UserRole | null>(() => {
     return (localStorage.getItem('flowers_user_role') as UserRole) || null;
@@ -136,7 +141,7 @@ export default function App() {
   const [isDoctorDataLoaded, setIsDoctorDataLoaded] = useState(false);
 
   // Active Tab: 4 MVP tabs strictly
-  const [activeTab, setActiveTab] = useState<'home' | 'records' | 'calendar' | 'passport'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'records' | 'calendar' | 'passport' | 'family'>('home');
 
   // Modal Overlays
   const [emergencyOpen, setEmergencyOpen] = useState(false);
@@ -343,10 +348,15 @@ export default function App() {
   // RECORD & APPOINTMENT HANDLERS
   // ========================================================
 
+  const FREE_RECORD_LIMIT = 5;
   const handleAddRecord = useCallback(async (newRecord: MedicalRecord) => {
+    if (subscriptionTier === 'free' && records.length >= FREE_RECORD_LIMIT) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setRecords(prev => [newRecord, ...prev]);
     await apiPost('/api/records', { ...newRecord, userId });
-  }, [userId]);
+  }, [userId, subscriptionTier, records.length]);
 
   const handleDeleteRecord = useCallback(async (id: string) => {
     setRecords(prev => prev.filter(r => r.id !== id));
@@ -785,6 +795,30 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'family' && (
+          <FamilyAccessView
+            motherProfileId={userId || 'mother-001'}
+            lang={lang}
+            onAdd={async (member) => {
+              await fetch('/api/family-members', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(member)
+              });
+            }}
+            onUpdate={async (m) => {
+              await fetch(`/api/family-members/${m.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: m.name, phone: m.phone, relation: m.relation, canEdit: m.canEdit })
+              });
+            }}
+            onDelete={async (id) => {
+              await fetch(`/api/family-members/${id}`, { method: 'DELETE' });
+            }}
+          />
+        )}
+
         {/* TAB 4: ⚘ PASSPORT (UNIFIED PROFILE & MATERNAL PASSPORT) */}
         {activeTab === 'passport' && (
           <PassportView
@@ -800,7 +834,7 @@ export default function App() {
 
       {/* 3. PERSISTENT 4-TAB NAVIGATION BAR */}
       <nav className="fixed bottom-0 left-0 right-0 bg-[#FEFAFB]/95 backdrop-blur-md border-t-2 border-[#AEE3D8] z-40 py-2 shadow-xs">
-        <div className="max-w-md mx-auto grid grid-cols-4 text-center">
+        <div className="max-w-md mx-auto grid grid-cols-5 text-center">
 
           {/* Home Tab */}
           <button
@@ -856,6 +890,26 @@ export default function App() {
             </span>
           </button>
 
+          {/* Family Tab */}
+          <button
+            onClick={() => {
+              if (subscriptionTier === 'free') { setShowUpgradeModal(true); return; }
+              setActiveTab('family');
+            }}
+            className={`flex flex-col items-center justify-center py-1 cursor-pointer transition-colors ${
+              activeTab === 'family' ? 'text-[#2F6F8F]' : 'text-[#CFADB9] hover:text-[#2F6F8F]'
+            }`}
+            style={{ minHeight: '42px' }}
+            id="tab-family"
+          >
+            <div className={`p-1 rounded-full transition-all ${activeTab === 'family' ? 'bg-[#AEE3D8] shadow-3xs' : ''}`}>
+              <Users className={`w-5 h-5 ${activeTab === 'family' ? 'text-[#2F6F8F] stroke-[2.5]' : ''}`} />
+            </div>
+            <span className={`text-[8px] mt-0.5 uppercase tracking-tight ${activeTab === 'family' ? 'font-black text-[#2F6F8F]' : 'font-semibold'}`}>
+              {t.family}
+            </span>
+          </button>
+
           {/* Passport Tab */}
           <button
             onClick={() => setActiveTab('passport')}
@@ -902,6 +956,19 @@ export default function App() {
           onClose={() => setShowJourneyReport(false)}
         />
       )}
+
+      {/* 7. MODAL: FREEMIUM UPGRADE PROMPT */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        onUpgrade={() => {
+          setSubscriptionTier('premium');
+          localStorage.setItem('flowers_subscription_tier', 'premium');
+          setShowUpgradeModal(false);
+        }}
+        lang={lang}
+        feature={lang === 'en' ? 'Premium Features' : '功能'}
+      />
     </div>
   );
 }

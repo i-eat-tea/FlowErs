@@ -4,6 +4,8 @@
 
 FLOWER is a bilingual (English / ភាសាខ្មែរ) mobile-first web app for pregnant women in Cambodia. It stores medical records, tracks appointments, and provides an emergency health profile so that when unexpected labor happens at an unfamiliar hospital, staff can access critical history instantly. Healthcare providers have a dedicated dashboard to view consented patient records.
 
+> ⚠️ **Tech Stack Note:** Backend is Express.js + MySQL (single `server.ts` file, not a separate `server/` directory). Frontend is React 19 + Vite + Tailwind v4 + Motion. See [Tech Stack](#tech-stack) below.
+
 ---
 
 ## The Problem
@@ -39,6 +41,8 @@ Pregnant women manage many physical medical documents across multiple clinics an
 | **Journey Summary Report** | Fetal weight estimation, trimester overview, health metrics display |
 | **Pregnancy Timeline** | Week-by-week growth stages with flower metaphor (seed → sprout → bloom) in EN and KH |
 | **Bilingual UI** | Full English and Khmer language toggle throughout the app |
+| **Family Member Access** | Add/view/edit/remove family members with view/edit permissions (P1 — done) |
+| **Freemium Tier Enforcement** | 5-record cap + family/sharing gate + upgrade modal (P2 — done) |
 
 #### Doctor / Hospital Admin Portal
 
@@ -63,13 +67,13 @@ Pregnant women manage many physical medical documents across multiple clinics an
 | Priority | Feature | Notes |
 |---|---|---|
 | P0 | **Secure Hospital Sharing (live)** | Doctor view currently uses mock patient data; wire to real shared records |
-| P1 | **Family Member Access** | Allow a partner or family member to view/edit records with permission |
 | P1 | **Cloud Backup** | Encrypted cloud storage for medical documents |
 | P1 | **Hospital / Clinic Portal (B2B)** | Full subscription portal for healthcare providers to receive patient records digitally |
 | P1 | **Interactive Timeline Visual** | Richer week-by-week visual timeline with milestones |
-| P2 | **Freemium Model** | Free tier vs Premium (unlimited storage, sharing, cloud backup) |
 | P2 | **Advanced Reminders** | Push notifications, custom reminder intervals, SMS reminders |
 | P2 | **B2B Healthcare Partnerships UI** | Insurance company, maternal health org, and clinic network dashboards |
+
+> ✅ **Family Member Access (P1)** and **Freemium Tier Enforcement (P2)** moved to **Currently Implemented** above.
 
 ---
 
@@ -115,8 +119,8 @@ Pregnant women manage many physical medical documents across multiple clinics an
 | Language Support | English + Khmer (KH) |
 | State | React `useState` / `useMemo` |
 | Frontend Storage | `localStorage` (offline fallback) |
-| Backend | Express.js + `tsx` |
-| Database | MySQL (via `mysql2`) |
+| Backend | Express.js + `tsx` (single `server.ts`) |
+| Database | MySQL (via `mysql2/promise` pool) |
 
 ---
 
@@ -150,12 +154,12 @@ Pregnant women manage many physical medical documents across multiple clinics an
 
 3. **Create the database schema** — run the SQL schema file against MySQL:
    ```bash
-   # Using the bundled schema
-   mysql -u root -p < db/schema.sql
+   # Using the bundled schema (10-table relational design)
+   mysql -u root -p < backend/schema.sql
    # or via Node
    node db/init.js
    ```
-   This creates `flowers_db` with `profiles`, `medical_records`, and `appointments` tables.
+   This creates `flowers_db` with 10 tables: `users`, `mother_profiles`, `pregnancy_profiles`, `mother_medical_info`, `emergency_contacts`, `medical_records`, `appointments`, `doctor_profiles`, `hospital_profiles`, `sharing_permissions`, `family_members`.
 
 4. **Run locally**
    ```bash
@@ -216,38 +220,32 @@ Base URL: `http://localhost:3000`
 
 ## Database Schema
 
-The MySQL database (`flowers_db`) is defined in `db/schema.sql`:
+The **MySQL database (`flowers_db`)** uses a 10-table relational design defined in `backend/schema.sql` (not the 3-table JSON blob described above):
 
 ```
-profiles
-├── id, user_id (unique), data (JSON), created_at, updated_at
-
-medical_records
-├── id, user_id, title, category, date, week, trimester,
-│   facility, doctor, notes, status, image_attachment,
-│   tags (JSON), extracted_data (JSON), created_at
-
-appointments
-├── id, user_id, title, date, time, hospital, doctor,
-│   notes, completed, type, reminder, image_attachment, created_at
+users → mother_profiles → pregnancy_profiles → mother_medical_info → emergency_contacts
+                      ↓
+                medical_records  +  appointments
+                      ↓
+doctor_profiles / hospital_profiles / sharing_permissions / family_members
 ```
 
-All three tables link back to `profiles.user_id` with `ON DELETE CASCADE`.
+All tables link via foreign keys (`ON DELETE CASCADE`) with composite profile endpoints (`GET /api/mother-profile/:userId`) that join across `mother_profiles` + `pregnancy_profiles` + `mother_medical_info` + `emergency_contacts`.
 
 ---
 
 ## Roadmap
 
 - [ ] **P0** — Live secure hospital record sharing (connected to real shared data)
-- [ ] **P1** — Family member access
+- [x] **P1** — Family member access
 - [ ] **P1** — Cloud backup for documents
 - [ ] **P1** — Hospital/Clinic B2B subscription portal
 - [ ] **P1** — Interactive pregnancy timeline visual
-- [ ] **P2** — Freemium tier system
+- [x] **P2** — Freemium tier system
 - [ ] **P2** — Push notifications + SMS reminders
 - [ ] **P2** — B2B healthcare partnerships UI (insurance, clinics, networks)
 
-> ✅ Backend API + MySQL schema, Doctor/Nurse dashboard, and role-based auth are **implemented**.
+> ✅ Backend API + MySQL schema, Doctor/Nurse dashboard, role-based auth, Family Access, and Freemium Enforcement are **implemented**.
 
 ---
 
