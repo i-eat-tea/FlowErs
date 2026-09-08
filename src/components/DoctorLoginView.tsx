@@ -244,6 +244,47 @@ export default function DoctorLoginView({
           </div>
         </div>
 
+        {/* Role Selection Bar — Always visible above auth mode tabs */}
+        <div className="flex items-center justify-between bg-[#FDDEEC]/30 rounded-xl p-3 border border-[#FDDEEC] mb-3">
+          <div className="flex items-center space-x-3">
+            <span className="text-xs font-black text-[#2F6F8F] uppercase tracking-wider font-heading">{t.selectRole}</span>
+          </div>
+          <div className="flex space-x-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRole(selectedRole === 'doctor' ? null : 'doctor');
+                setError('');
+              }}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer border ${
+                selectedRole === 'doctor'
+                  ? 'bg-[#FA6B90] text-white border-[#FA6B90] shadow-3xs'
+                  : 'bg-white text-[#2F6F8F] border-[#FDDEEC] hover:bg-[#FEFAFB]'
+              }`}
+              id="role-btn-doctor"
+            >
+              <Stethoscope className="w-3.5 h-3.5" />
+              <span>{t.doctorBtn}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRole(selectedRole === 'hospital_admin' ? null : 'hospital_admin');
+                setError('');
+              }}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer border ${
+                selectedRole === 'hospital_admin'
+                  ? 'bg-[#AEE3D8] text-[#2F6F8F] border-[#AEE3D8] shadow-3xs'
+                  : 'bg-white text-[#2F6F8F] border-[#FDDEEC] hover:bg-[#FEFAFB]'
+              }`}
+              id="role-btn-hospital"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{t.hospitalBtn}</span>
+            </button>
+          </div>
+        </div>
+
         {/* Auth Mode Tabs (Sign In / Create Account) */}
         <div className="flex bg-[#FEFAFB] p-1 rounded-2xl border border-[#FDDEEC]">
           <button
@@ -252,7 +293,7 @@ export default function DoctorLoginView({
             className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
               authMode === 'login'
                 ? 'bg-gradient-to-r from-[#2F6F8F] to-[#4A8BAF] text-white shadow-3xs'
-                : 'text-[#2F6F8F]/70 hover:text-[#2F6F8F]'
+                : 'bg-white text-[#2F6F8F]/60 hover:bg-[#FEFAFB] hover:text-[#2F6F8F] border border-[#FDDEEC]/30'
             }`}
             id="doc-tab-mode-login"
           >
@@ -264,8 +305,8 @@ export default function DoctorLoginView({
             onClick={() => switchMode('register')}
             className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
               authMode === 'register'
-                ? 'bg-gradient-to-r from-[#FA6B90] to-[#F4A6B5] text-white shadow-3xs'
-                : 'text-[#2F6F8F]/70 hover:text-[#2F6F8F]'
+                ? 'bg-gradient-to-r from-[#2F6F8F] to-[#4A8BAF] text-white shadow-3xs'
+                : 'bg-white text-[#2F6F8F]/60 hover:bg-[#FEFAFB] hover:text-[#2F6F8F] border border-[#FDDEEC]/30'
             }`}
             id="doc-tab-mode-register"
           >
@@ -276,31 +317,13 @@ export default function DoctorLoginView({
 
         {authMode === 'register' ? (
           <>
-            {/* Selected Role Display for Register */}
-            <div className="flex items-center justify-between bg-[#FDDEEC]/30 rounded-xl p-3 border border-[#FDDEEC]">
-              <div className="flex items-center space-x-2">
-                {selectedRole === 'doctor' ? (
-                  <>
-                    <Stethoscope className="w-4 h-4 text-[#FA6B90]" />
-                    <span className="text-xs font-black text-[#2F6F8F]">{t.doctorBtn}</span>
-                  </>
-                ) : (
-                  <>
-                    <Building2 className="w-4 h-4 text-[#2F6F8F]" />
-                    <span className="text-xs font-black text-[#2F6F8F]">{t.hospitalBtn}</span>
-                  </>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRole(null);
-                  setError('');
-                }}
-                className="text-xs font-bold text-[#2F6F8F]/60 hover:text-[#2F6F8F] cursor-pointer"
-              >
-                {lang === 'en' ? 'Change' : 'ផ្លាស់ប្តូរ'}
-              </button>
+            {/* Register Form Header */}
+            <div className="text-center mb-2">
+              <h3 className="text-sm font-black text-[#2F6F8F] font-heading">
+                {selectedRole === 'doctor'
+                  ? `${t.doctorBtn}`
+                  : t.hospitalBtn}
+              </h3>
             </div>
 
             {/* Register Form */}
@@ -419,33 +442,6 @@ export default function DoctorLoginView({
           </>
         ) : (
           <>
-            {/* Selected Role Display */}
-            <div className="flex items-center justify-between bg-[#FDDEEC]/30 rounded-xl p-3 border border-[#FDDEEC]">
-              <div className="flex items-center space-x-2">
-                {selectedRole === 'doctor' ? (
-                  <>
-                    <Stethoscope className="w-4 h-4 text-[#FA6B90]" />
-                    <span className="text-xs font-black text-[#2F6F8F]">{t.doctorBtn}</span>
-                  </>
-                ) : (
-                  <>
-                    <Building2 className="w-4 h-4 text-[#2F6F8F]" />
-                    <span className="text-xs font-black text-[#2F6F8F]">{t.hospitalBtn}</span>
-                  </>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRole(null);
-                  setError('');
-                }}
-                className="text-xs font-bold text-[#2F6F8F]/60 hover:text-[#2F6F8F] cursor-pointer"
-              >
-                {lang === 'en' ? 'Change' : 'ផ្លាស់ប្តូរ'}
-              </button>
-            </div>
-
             {/* Login Form */}
             <form onSubmit={handleSubmit} className="space-y-4" id="doctor-login-form">
               {error && (

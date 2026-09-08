@@ -8,6 +8,7 @@ import {
   Shield, QrCode, Phone, User, Calendar, Heart, AlertTriangle,
   FileText, Check, Edit3, X, Droplets, Flower2, ExternalLink
 } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { PassportProfile } from '../types';
 import { TRANSLATIONS } from '../data';
 
@@ -481,7 +482,14 @@ export default function PassportView({
             </div>
 
             <div className="p-4 bg-white rounded-2xl border border-[#FDDEEC] inline-block shadow-xs">
-              <QrCode className="w-40 h-40 text-[#2F6F8F] mx-auto" />
+              <QRCodeCanvas
+                value={`FLOWER|${profile.personal.name}|${profile.medical.bloodType}|${profile.medical.emergencyContactPhone}|${profile.pregnancy.edd}`}
+                size={160}
+                level="M"
+                bgColor="#FFFFFF"
+                fgColor="#2F6F8F"
+                includeMargin={false}
+              />
             </div>
 
             <div className="space-y-1">
