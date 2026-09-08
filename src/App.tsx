@@ -832,9 +832,9 @@ export default function App() {
         )}
       </main>
 
-      {/* 3. PERSISTENT 4-TAB NAVIGATION BAR */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-[#FEFAFB]/95 backdrop-blur-md border-t-2 border-[#AEE3D8] z-40 py-2 shadow-xs">
-        <div className="max-w-md mx-auto grid grid-cols-5 text-center">
+      {/* 3. PERSISTENT 4-TAB NAVIGATION BAR (sticky bottom bar) */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-[#FEFAFB]/95 backdrop-blur-md border-t-2 border-[#AEE3D8] z-40 py-2 shadow-xs pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+        <div className="max-w-md mx-auto grid grid-cols-5 text-center items-stretch">
 
           {/* Home Tab */}
           <button
@@ -845,7 +845,7 @@ export default function App() {
             className={`flex flex-col items-center justify-center py-1 cursor-pointer transition-colors ${
               activeTab === 'home' ? 'text-[#2F6F8F]' : 'text-[#CFADB9] hover:text-[#2F6F8F]'
             }`}
-            style={{ minHeight: '48px' }}
+            style={{ minHeight: '56px' }}
             id="tab-home"
           >
             <div className={`p-1 rounded-full transition-all ${activeTab === 'home' ? 'bg-[#AEE3D8] shadow-3xs' : ''}`}>

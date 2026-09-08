@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { Flower2, Lock, Mail, Globe, Sparkles, AlertCircle, ShieldCheck, Stethoscope, Building2, ArrowLeft } from 'lucide-react';
+import { Flower2, Lock, Mail, Globe, Sparkles, AlertCircle, ShieldCheck, Stethoscope, Building2, ArrowLeft, User, UserPlus, LogIn } from 'lucide-react';
 
 interface DoctorLoginViewProps {
   lang: 'en' | 'kh';
@@ -22,11 +22,20 @@ export default function DoctorLoginView({
   onLoginSuccess,
   onSwitchToMotherLogin
 }: DoctorLoginViewProps) {
+  // Auth mode: Sign In vs Create Account
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [selectedRole, setSelectedRole] = useState<'doctor' | 'hospital_admin' | null>(null);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const switchMode = (mode: 'login' | 'register') => {
+    setAuthMode(mode);
+    setError('');
+  };
 
   const wording = {
     en: {
@@ -69,7 +78,8 @@ export default function DoctorLoginView({
     e.preventDefault();
     setError('');
 
-    if (!selectedRole) {
+    // Role required for login mode, not needed for register mode
+    if (authMode === 'login' && !selectedRole) {
       setError(lang === 'en' ? 'Please select your role.' : 'សូមជ្រើសរើសតួនាទីរបស់អ្នក។');
       return;
     }
@@ -84,48 +94,95 @@ export default function DoctorLoginView({
       return;
     }
 
+    if (authMode === 'register') {
+      if (!fullName.trim()) {
+        setError(lang === 'en' ? 'Please enter your full name.' : 'សូមបញ្ចូលឈ្មោះពេញរបស់អ្នក។');
+        return;
+      }
+      if (!selectedRole) {
+        setError(lang === 'en' ? 'Please select your role.' : 'សូមជ្រើសរើសតួនាទីរបស់អ្នក។');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError(lang === 'en' ? 'Passwords do not match.' : 'ពាក្យសម្ងាត់ទាំងពីរមិនត្រូវគ្នាទេ។');
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password: password
-        })
-      });
+      if (authMode === 'login') {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.trim().toLowerCase(),
+            password: password,
+            role: selectedRole
+          })
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.ok) {
-        // Verify the role matches what the user selected
-        if (data.user.role !== selectedRole) {
+        if (response.ok) {
+          // Verify the role matches what the user selected
+          if (data.user.role !== selectedRole) {
+            setError(
+              lang === 'en'
+                ? `This account is registered as a ${data.user.role}, not ${selectedRole}.`
+                : `គណនីនេះចុះឈ្មោះជា ${data.user.role} មិនមែន ${selectedRole} ទេ។`
+            );
+            setIsLoading(false);
+            return;
+          }
+
+          // Store token and user data
+          localStorage.setItem('flowers_auth_token', data.token);
+          localStorage.setItem('flowers_user_id', data.user.id);
+          localStorage.setItem('flowers_user_email', data.user.email);
+          localStorage.setItem('flowers_user_role', data.user.role);
+
+          onLoginSuccess(email.trim(), selectedRole);
+        } else {
           setError(
             lang === 'en'
-              ? `This account is registered as a ${data.user.role}, not ${selectedRole}.`
-              : `គណនីនេះចុះឈ្មោះជា ${data.user.role} មិនមែន ${selectedRole} ទេ។`
+              ? data.error || 'Login failed. Please check your credentials.'
+              : 'ការចូលបរាជ័យ។ សូមពិនិត្យអ៊ីមែល និងពាក្យសម្ងាត់របស់អ្នក។'
           );
-          setIsLoading(false);
-          return;
         }
-
-        // Store token and user data
-        localStorage.setItem('flowers_auth_token', data.token);
-        localStorage.setItem('flowers_user_id', data.user.id);
-        localStorage.setItem('flowers_user_email', data.user.email);
-        localStorage.setItem('flowers_user_role', data.user.role);
-
-        onLoginSuccess(email.trim(), selectedRole);
       } else {
-        setError(
-          lang === 'en'
-            ? data.error || 'Login failed. Please check your credentials.'
-            : 'ការចូលបរាជ័យ។ សូមពិនិត្យអ៊ីមែល និងពាក្យសម្ងាត់របស់អ្នក។'
-        );
+        // Register mode
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.trim().toLowerCase(),
+            password: password,
+            role: selectedRole,
+            fullName: fullName.trim()
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          localStorage.setItem('flowers_auth_token', data.token);
+          localStorage.setItem('flowers_user_id', data.user.id);
+          localStorage.setItem('flowers_user_email', data.user.email);
+          localStorage.setItem('flowers_user_role', selectedRole);
+
+          onLoginSuccess(email.trim(), selectedRole);
+        } else {
+          setError(
+            lang === 'en'
+              ? data.error || 'Registration failed. Please try again.'
+              : 'ការចុះឈ្មោះបរាជ័យ។ សូមព្យាយាមម្តងទៀត។'
+          );
+        }
       }
     } catch (err) {
-      console.error('Doctor login error:', err);
+      console.error('Doctor auth error:', err);
       setError(
         lang === 'en'
           ? 'Unable to connect to server. Please try again.'
@@ -187,53 +244,179 @@ export default function DoctorLoginView({
           </div>
         </div>
 
-        {/* Security badge */}
-        <div className="bg-[#AEE3D8]/20 border border-[#AEE3D8] rounded-2xl p-3 flex items-start space-x-2.5">
-          <ShieldCheck className="w-4.5 h-4.5 text-[#2F6F8F] shrink-0 mt-0.5" />
-          <p className="text-[10px] text-[#2F6F8F]/90 font-bold leading-normal">
-            {t.security}
-          </p>
+        {/* Auth Mode Tabs (Sign In / Create Account) */}
+        <div className="flex bg-[#FEFAFB] p-1 rounded-2xl border border-[#FDDEEC]">
+          <button
+            type="button"
+            onClick={() => switchMode('login')}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+              authMode === 'login'
+                ? 'bg-gradient-to-r from-[#2F6F8F] to-[#4A8BAF] text-white shadow-3xs'
+                : 'text-[#2F6F8F]/70 hover:text-[#2F6F8F]'
+            }`}
+            id="doc-tab-mode-login"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>{lang === 'en' ? 'Sign In' : 'ចូលប្រើ'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMode('register')}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+              authMode === 'register'
+                ? 'bg-gradient-to-r from-[#FA6B90] to-[#F4A6B5] text-white shadow-3xs'
+                : 'text-[#2F6F8F]/70 hover:text-[#2F6F8F]'
+            }`}
+            id="doc-tab-mode-register"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>{lang === 'en' ? 'Create Account' : 'ចុះឈ្មោះថ្មី'}</span>
+          </button>
         </div>
 
-        {/* Role Selector */}
-        {!selectedRole ? (
-          <div className="space-y-4">
-            <h2 className="text-sm font-black text-[#2F6F8F] text-center uppercase tracking-wide">
-              {t.selectRole}
-            </h2>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Doctor Button */}
+        {authMode === 'register' ? (
+          <>
+            {/* Selected Role Display for Register */}
+            <div className="flex items-center justify-between bg-[#FDDEEC]/30 rounded-xl p-3 border border-[#FDDEEC]">
+              <div className="flex items-center space-x-2">
+                {selectedRole === 'doctor' ? (
+                  <>
+                    <Stethoscope className="w-4 h-4 text-[#FA6B90]" />
+                    <span className="text-xs font-black text-[#2F6F8F]">{t.doctorBtn}</span>
+                  </>
+                ) : (
+                  <>
+                    <Building2 className="w-4 h-4 text-[#2F6F8F]" />
+                    <span className="text-xs font-black text-[#2F6F8F]">{t.hospitalBtn}</span>
+                  </>
+                )}
+              </div>
               <button
                 type="button"
-                onClick={() => setSelectedRole('doctor')}
-                className="p-4 rounded-2xl border-2 border-[#FDDEEC] bg-white hover:bg-[#FFF7E9] hover:border-[#FA6B90] transition-all cursor-pointer flex flex-col items-center space-y-2"
-                id="role-doctor-btn"
+                onClick={() => {
+                  setSelectedRole(null);
+                  setError('');
+                }}
+                className="text-xs font-bold text-[#2F6F8F]/60 hover:text-[#2F6F8F] cursor-pointer"
               >
-                <div className="w-10 h-10 bg-[#FA6B90]/20 rounded-xl flex items-center justify-center">
-                  <Stethoscope className="w-5 h-5 text-[#FA6B90]" />
-                </div>
-                <span className="text-xs font-black text-[#2F6F8F]">
-                  {t.doctorBtn}
-                </span>
-              </button>
-
-              {/* Hospital Admin Button */}
-              <button
-                type="button"
-                onClick={() => setSelectedRole('hospital_admin')}
-                className="p-4 rounded-2xl border-2 border-[#FDDEEC] bg-white hover:bg-[#FFF7E9] hover:border-[#2F6F8F] transition-all cursor-pointer flex flex-col items-center space-y-2"
-                id="role-hospital-btn"
-              >
-                <div className="w-10 h-10 bg-[#2F6F8F]/20 rounded-xl flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-[#2F6F8F]" />
-                </div>
-                <span className="text-xs font-black text-[#2F6F8F]">
-                  {t.hospitalBtn}
-                </span>
+                {lang === 'en' ? 'Change' : 'ផ្លាស់ប្តូរ'}
               </button>
             </div>
-          </div>
+
+            {/* Register Form */}
+            <form onSubmit={handleSubmit} className="space-y-4" id="doctor-register-form">
+              {/* Full Name */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-[#2F6F8F] uppercase tracking-wider pl-1 font-heading">
+                  {lang === 'en' ? "Full Name *" : "ឈ្មោះពេញ *"}
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[#CFADB9]">
+                    <User className="w-4.5 h-4.5" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder={lang === 'en' ? 'e.g. Dr. Sophy Lim' : 'ឧ. វេជ្ជបណ្ឌិត សុភី លីម'}
+                    className="w-full pl-10 pr-4 py-3 bg-[#FEFAFB] rounded-xl border border-[#FDDEEC] focus:ring-2 focus:ring-[#FA6B90] focus:border-[#FA6B90] text-sm text-[#2F6F8F] placeholder-[#CFADB9] font-bold transition-all"
+                    id="doctor-register-name-input"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="flex items-start space-x-2 bg-[#FDDEEC] border border-[#F4A6B5] p-3.5 rounded-xl text-xs text-[#FA6B90] font-bold">
+                  <AlertCircle className="w-4 h-4 text-[#FA6B90] shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Email */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-[#2F6F8F] uppercase tracking-wider pl-1 font-heading">
+                  {t.emailLabel} *
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[#CFADB9]">
+                    <Mail className="w-4.5 h-4.5" />
+                  </span>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={t.emailPlaceholder}
+                    className="w-full pl-10 pr-4 py-3 bg-[#FEFAFB] rounded-xl border border-[#FDDEEC] focus:ring-2 focus:ring-[#FA6B90] focus:border-[#FA6B90] text-sm text-[#2F6F8F] placeholder-[#CFADB9] font-bold transition-all"
+                    id="doctor-register-email-input"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-[#2F6F8F] uppercase tracking-wider pl-1 font-heading">
+                  {lang === 'en' ? 'Create Password (min 4 chars)' : 'បង្កើតពាក្យសម្ងាត់ (យ៉ាងតិច ៤តួ)'} *
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[#CFADB9]">
+                    <Lock className="w-4.5 h-4.5" />
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    minLength={4}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-4 py-3 bg-[#FEFAFB] rounded-xl border border-[#FDDEEC] focus:ring-2 focus:ring-[#FA6B90] focus:border-[#FA6B90] text-sm text-[#2F6F8F] placeholder-[#CFADB9] font-mono tracking-wide font-bold transition-all"
+                    id="doctor-register-password-input"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              {/* Confirm Password */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-[#2F6F8F] uppercase tracking-wider pl-1 font-heading">
+                  {lang === 'en' ? 'Confirm Password' : 'ផ្ទៀងផ្ទាត់ពាក្យសម្ងាត់'} *
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[#CFADB9]">
+                    <Lock className="w-4.5 h-4.5" />
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-4 py-3 bg-[#FEFAFB] rounded-xl border border-[#FDDEEC] focus:ring-2 focus:ring-[#FA6B90] focus:border-[#FA6B90] text-sm text-[#2F6F8F] placeholder-[#CFADB9] font-mono tracking-wide font-bold transition-all"
+                    id="doctor-register-confirm-password-input"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3.5 bg-gradient-to-r from-[#FA6B90] to-[#F4A6B5] hover:from-[#f05e84] hover:to-[#eb95a5] active:scale-[0.99] text-white font-black rounded-xl text-sm transition-all cursor-pointer shadow-3xs flex items-center justify-center space-x-2 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                id="doctor-register-submit-btn"
+              >
+                <UserPlus className="w-4.5 h-4.5 text-white" />
+                <span>
+                  {isLoading
+                    ? (lang === 'en' ? 'Creating Account...' : 'កំពុងបង្កើតគណនី...')
+                    : (lang === 'en' ? 'Create Account' : 'បង្កើតគណនី')}
+                </span>
+              </button>
+            </form>
+          </>
         ) : (
           <>
             {/* Selected Role Display */}
