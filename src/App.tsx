@@ -738,18 +738,8 @@ export default function App() {
         lang={lang}
         setLang={setLang}
         onOpenEmergency={() => setEmergencyOpen(true)}
+        onLogout={handleLogout}
       />
-
-      {/* Add Logout button to header — TODO: integrate into Header component */}
-      <div className="fixed top-4 right-4 z-40">
-        <button
-          onClick={handleLogout}
-          className="px-3 py-1.5 rounded-full text-xs font-black bg-[#FDDEEC] hover:bg-[#F4A6B5] text-[#FA6B90] transition-all cursor-pointer border border-[#FA6B90] shadow-3xs flex items-center space-x-1"
-        >
-          <LogOut className="w-3 h-3" />
-          <span>{lang === 'en' ? 'Logout' : 'ចាកចេញ'}</span>
-        </button>
-      </div>
 
       {/* 2. CORE DISPLAY CONTAINER (FOCUSED MOBILE/TABLET VIEWPORT) */}
       <main className="flex-1 w-full max-w-md mx-auto bg-[#FEFAFB] pb-24 min-h-[calc(100vh-60px)] px-4 py-4 relative border-x border-[#AEE3D8]/50">

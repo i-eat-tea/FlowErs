@@ -483,7 +483,7 @@ export default function PassportView({
 
             <div className="p-4 bg-white rounded-2xl border border-[#FDDEEC] inline-block shadow-xs">
               <QRCodeCanvas
-                value={`FLOWER|${profile.personal.name}|${profile.medical.bloodType}|${profile.medical.emergencyContactPhone}|${profile.pregnancy.edd}`}
+                value={`FLOWER|PROFILE|${profile.personal.name}|${profile.medical.bloodType}|${profile.medical.emergencyContactPhone}|${profile.pregnancy.edd}|https://flower.app/passport`}
                 size={160}
                 level="M"
                 bgColor="#FFFFFF"
