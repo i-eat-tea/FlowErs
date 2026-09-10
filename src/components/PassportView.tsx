@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import {
   Shield, QrCode, Phone, User, Calendar, Heart, AlertTriangle,
-  FileText, Check, Edit3, X, Droplets, Flower2, ExternalLink
+  FileText, Check, Edit3, X, Droplets, Flower2, ExternalLink, LogOut
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { PassportProfile } from '../types';
@@ -464,6 +464,20 @@ export default function PassportView({
           </div>
         </div>
       )}
+
+      {/* 9. BOTTOM LOGOUT — inside profile page, never overlaps header */}
+      <div className="pt-2 border-t border-[#FDDEEC]">
+        <button
+          onClick={() => {
+            localStorage.removeItem('flower_token');
+            window.location.reload();
+          }}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-[#FA6B90] to-[#F4A6B5] text-white rounded-2xl text-xs font-black uppercase shadow-3xs cursor-pointer transition-all hover:brightness-105"
+        >
+          <LogOut className="w-4 h-4" />
+          {lang === 'en' ? 'Logout' : 'ログアウト'}
+        </button>
+      </div>
 
       {/* 8. QR CODE FULL PREVIEW MODAL */}
       {showQRModal && (
