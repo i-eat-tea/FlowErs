@@ -10,14 +10,16 @@ import {
   CheckCircle, AlertTriangle, Clock, Share2, Download,
   Flower2, Building
 } from 'lucide-react';
-import { MedicalRecord, RecordCategory } from '../types';
+import { MedicalRecord, RecordCategory, DocumentFolder, FolderQRData } from '../types';
 import { TRANSLATIONS } from '../data';
 
 interface RecordsViewProps {
   records: MedicalRecord[];
+  folders?: DocumentFolder[];
   onAddRecord: (record: MedicalRecord) => void;
   onDeleteRecord: (id: string) => void;
   onOpenScanRecord: () => void;
+  onGenerateFolderQR?: (folder: DocumentFolder) => void;
   lang: 'en' | 'kh';
   selectedRecordId?: string | null;
 }
@@ -33,9 +35,11 @@ const CATEGORY_TABS: { id: 'all' | RecordCategory; labelEn: string; labelKh: str
 
 export default function RecordsView({
   records,
+  folders = [],
   onAddRecord,
   onDeleteRecord,
   onOpenScanRecord,
+  onGenerateFolderQR,
   lang,
   selectedRecordId
 }: RecordsViewProps) {

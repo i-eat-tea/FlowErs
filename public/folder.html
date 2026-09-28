@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FLOWER — Document Folder</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+:root{--mint:#AEE3D8;--deep:#2F6F8F;--pink:#FA6B90;--bg:#FEFAFB;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Outfit',system-ui,sans-serif;background:var(--bg);color:var(--deep);line-height:1.35;}
+.container{max-width:420px;margin:24px auto;padding:28px;border-radius:28px;background:#fff;border:2px solid var(--mint);box-shadow:0 10px 30px rgba(47,111,143,.08);}
+h1{font-weight:900;font-size:22px;letter-spacing:-.5px;margin-bottom:4px;}
+.sub{font-size:11px;color:var(--deep)/70;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;}
+.tag{display:inline-block;padding:4px 10px;border-radius:999px;background:#FDDEEC;color:var(--pink);font-weight:900;font-size:11px;margin-bottom:12px;}
+.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F4F4F5;font-size:13px;font-weight:700;}
+.note{font-size:11px;color:#777;padding-top:10px;}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="tag">FOLDER — SCANNED DOCUMENT</div>
+  <h1 id="folder-title">Document Folder</h1>
+  <p class="sub" id="folder-sub">Scan QR to open folder</p>
+  <div class="row"><span>Category</span> <b id="folder-cat">—</b></div>
+  <div class="row"><span>Format</span> <b id="folder-fmt">Category + Date + Label</b></div>
+  <div class="row"><span>Custom Label</span> <b id="folder-label">—</b></div>
+  <div class="row"><span>Created</span> <b id="folder-date">—</b></div>
+  <p class="note">This folder is linked from the FLOWER app scan document system. It shows scanned files organized by category + date + user label.</p>
+</div>
+<script>
+const params = new URLSearchParams(window.location.search);
+const id = params.get('folderId');
+if (id) {
+  document.getElementById('folder-title').textContent = 'Folder #' + id.substring(0,8);
+  document.getElementById('folder-sub').textContent = 'Scan QR to view scanned documents';
+}
+</script>
+</body>
+</html>

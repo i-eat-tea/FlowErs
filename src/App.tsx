@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Home, FileText, Calendar, User, Plus, Camera, Flower2, LogOut, Users } from 'lucide-react';
 
 // Data and Types
-import { PassportProfile, MedicalRecord, Appointment, UserRole, MotherProfile, PregnancyProfile, MedicalRecord as NewMedicalRecord, PatientSummary, SubscriptionTier } from './types';
+import { PassportProfile, MedicalRecord, Appointment, UserRole, MotherProfile, PregnancyProfile, MedicalRecord as NewMedicalRecord, PatientSummary, SubscriptionTier, DocumentFolder } from './types';
 import {
   DEFAULT_PROFILE,
   DEFAULT_RECORDS,
@@ -163,6 +163,11 @@ export default function App() {
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
     const saved = localStorage.getItem('flowers_maternal_appointments');
     return saved ? JSON.parse(saved) : DEFAULT_APPOINTMENTS;
+  });
+
+  const [folders, setFolders] = useState<DocumentFolder[]>(() => {
+    const saved = localStorage.getItem('flowers_document_folders');
+    return saved ? JSON.parse(saved) : [];
   });
 
   // Track whether data has been loaded from MySQL to avoid overwriting
@@ -765,9 +770,14 @@ export default function App() {
         {activeTab === 'records' && (
           <RecordsView
             records={records}
+            folders={folders}
             onAddRecord={handleAddRecord}
             onDeleteRecord={handleDeleteRecord}
             onOpenScanRecord={() => setIsScanModalOpen(true)}
+            onGenerateFolderQR={(folder) => {
+              const url = `https://flowers-qrr1.onrender.com/folder.html?folderId=${folder.id}`;
+              window.open(url, '_blank');
+            }}
             lang={lang}
             selectedRecordId={selectedRecordId}
           />

@@ -233,6 +233,25 @@ export interface MedicalInfo {
  * @deprecated Use split types: MotherProfile + PregnancyProfile + MotherMedicalInfo + EmergencyContact
  * Maps to: personal → MotherProfile, pregnancy → PregnancyProfile, medical → MotherMedicalInfo + EmergencyContact[]
  */
+export interface DocumentFolder {
+  id: string;
+  motherProfileId: string;
+  category: RecordCategory | 'folder';
+  folderName: string;          // user-defined custom name
+  formatTemplate: string;      // prebuilt format: Category + Date + Custom label
+  createdAt: string;
+  documentCount: number;
+  folderUrl?: string;          // static page URL for QR link
+}
+
+export interface FolderQRData {
+  folderId: string;
+  motherProfileId: string;
+  category: RecordCategory | 'folder';
+  folderName: string;
+  previewData: { category: string; date: string; label: string };
+}
+
 export interface PassportProfile {
   personal: PersonalInfo;
   pregnancy: PregnancyInfo;

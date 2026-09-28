@@ -497,7 +497,7 @@ export default function PassportView({
 
             <div className="p-4 bg-white rounded-2xl border border-[#FDDEEC] inline-block shadow-xs">
               <QRCodeCanvas
-                value={`FLOWER|PROFILE|${profile.personal.name}|${profile.medical.bloodType}|${profile.medical.emergencyContactPhone}|${profile.pregnancy.edd}|https://flower.app/passport`}
+                value={`https://flowers-qrr1.onrender.com/passport.html?user=${profile.personal.name || 'mother'}&blood=${profile.medical.bloodType}&contact=${profile.medical.emergencyContactPhone}`}
                 size={160}
                 level="M"
                 bgColor="#FFFFFF"
