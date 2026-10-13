@@ -554,6 +554,7 @@ export default function AppointmentsView({
                 const hasAppt = apptsOnDate.length > 0;
                 const hasUltrasound = apptsOnDate.some(a => a.type === 'Ultrasound');
                 const hasANC = apptsOnDate.some(a => a.type === 'ANC');
+                const hasReminder = !!(dailyReminders[cell.dateStr]?.note || dailyReminders[cell.dateStr]?.task);
 
                 return (
                   <button
@@ -594,6 +595,7 @@ export default function AppointmentsView({
 
                     {/* Bottom Indicator for Appointments */}
                     <div className="w-full flex items-center justify-center gap-1 min-h-[20px]">
+                      {hasReminder && !isSelected && <span className="w-1.5 h-1.5 rounded-full bg-[#2F6F8F] shadow-xs" title="Reminder" />}
                       {hasAppt && (
                         <div className={`inline-flex items-center space-x-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                           isSelected
@@ -771,12 +773,27 @@ export default function AppointmentsView({
         <div className="bg-[#FEFAFB] rounded-2xl border border-[#FDDEEC] p-3 space-y-2">
           <div className="flex items-center justify-between">
             <h5 className="text-[10px] font-black uppercase text-[#2F6F8F]/70 tracking-wider">Daily Note / Reminder</h5>
-            <button onClick={() => { const n = (dailyReminders[selectedDateStr]?.note || ''); const t = (dailyReminders[selectedDateStr]?.task || ''); setDailyReminders({ ...dailyReminders, [selectedDateStr]: { note: n, task: t, reminderText: (n || t || '') } }); localStorage.setItem('flowers_daily_reminders', JSON.stringify({ ...dailyReminders, [selectedDateStr]: { note: n, task: t, reminderText: (n || t || '') } })); }} className="text-[9px] font-black text-[#FA6B90] hover:underline">Save</button>
+            <button
+              onClick={() => {
+                const current = dailyReminders[selectedDateStr] || {};
+                const updated = { ...dailyReminders, [selectedDateStr]: { ...current, reminderText: (current.task || '') + ' ' + (current.note || '') } };
+                setDailyReminders(updated);
+                localStorage.setItem('flowers_daily_reminders', JSON.stringify(updated));
+                setDailyReminders({ ...updated, [selectedDateStr]: { task: '', note: '', reminderText: (current.task || '') + ' ' + (current.note || '') } });
+              }}
+              className="text-[9px] font-black text-[#FA6B90] hover:underline">Save</button>
           </div>
           <input type="text" placeholder="Task / reminder ..." value={dailyReminders[selectedDateStr]?.task || ''} onChange={e => setDailyReminders({ ...dailyReminders, [selectedDateStr]: { ...(dailyReminders[selectedDateStr] || {}), task: e.target.value } })} className="w-full p-2 rounded-lg border border-[#FDDEEC] text-[11px] bg-white" />
           <textarea rows={2} placeholder="Note ..." value={dailyReminders[selectedDateStr]?.note || ''} onChange={e => setDailyReminders({ ...dailyReminders, [selectedDateStr]: { ...(dailyReminders[selectedDateStr] || {}), note: e.target.value } })} className="w-full p-2 rounded-lg border border-[#FDDEEC] text-[11px] bg-white resize-none" />
           {(dailyReminders[selectedDateStr]?.note || dailyReminders[selectedDateStr]?.task) && (
-            <div className="text-[10px] text-[#FA6B90] font-bold bg-[#FDDEEC]/40 rounded-lg px-2 py-1">📌 {dailyReminders[selectedDateStr]?.task || ''} {dailyReminders[selectedDateStr]?.note ? ' — ' + dailyReminders[selectedDateStr]?.note : ''}</div>
+            <div className="bg-[#FDDEEC] border border-[#F5B1CE] rounded-xl p-2.5 space-y-1 shadow-3xs">
+              {dailyReminders[selectedDateStr]?.task && (
+                <div className="bg-white rounded-lg px-2 py-1.5 text-[10px] font-bold text-[#FA6B90] border border-[#F5B1CE]">📌 {dailyReminders[selectedDateStr].task}</div>
+              )}
+              {dailyReminders[selectedDateStr]?.note && (
+                <div className="bg-white rounded-lg px-2 py-1.5 text-[10px] text-[#2F6F8F] font-medium border border-[#FDDEEC]">📝 {dailyReminders[selectedDateStr].note}</div>
+              )}
+            </div>
           )}
         </div>
 

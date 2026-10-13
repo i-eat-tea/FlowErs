@@ -544,7 +544,7 @@ export default function RecordsView({
 
             <div className="bg-[#FEFAFB] rounded-2xl border border-[#FDDEEC] p-4 inline-block shadow-inner">
               <QRCodeCanvas
-                value={`${window.location.origin}/folder?id=${encodeURIComponent(folderQRData.folderId)}&name=${encodeURIComponent(folderQRData.folderName)}&cat=${encodeURIComponent(folderQRData.previewData.category)}`}
+                value={`${window.location.origin}/folder.html?folderId=${encodeURIComponent(folderQRData.folderId)}&name=${encodeURIComponent(folderQRData.folderName)}&cat=${encodeURIComponent(folderQRData.previewData.category)}`}
                 size={200}
                 level="M"
                 includeMargin={true}
@@ -559,7 +559,7 @@ export default function RecordsView({
 
             <button
               onClick={() => {
-                const url = `${window.location.origin}/folder?id=${folderQRData.folderId}`;
+                const url = `${window.location.origin}/folder.html?folderId=${folderQRData.folderId}&name=${encodeURIComponent(folderQRData.folderName)}&cat=${encodeURIComponent(folderQRData.previewData.category)}`;
                 window.open(url, '_blank');
                 setFolderQRData(null);
               }}

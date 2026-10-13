@@ -775,7 +775,7 @@ export default function App() {
             onDeleteRecord={handleDeleteRecord}
             onOpenScanRecord={() => setIsScanModalOpen(true)}
             onGenerateFolderQR={(folder) => {
-              const url = `${window.location.origin}/folder?id=${folder.id}`;
+              const url = `${window.location.origin}/folder.html?folderId=${folder.id}`;
               window.open(url, '_blank');
             }}
             lang={lang}
