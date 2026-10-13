@@ -775,7 +775,7 @@ export default function App() {
             onDeleteRecord={handleDeleteRecord}
             onOpenScanRecord={() => setIsScanModalOpen(true)}
             onGenerateFolderQR={(folder) => {
-              const url = `https://flowers-qrr1.onrender.com/folder.html?folderId=${folder.id}`;
+              const url = `${window.location.origin}/folder?id=${folder.id}`;
               window.open(url, '_blank');
             }}
             lang={lang}
@@ -792,6 +792,8 @@ export default function App() {
             onToggleComplete={handleToggleAppointmentComplete}
             onDeleteAppointment={handleDeleteAppointment}
             lang={lang}
+            profile={profile}
+            currentWeek={pregnancyMetrics.weeks}
           />
         )}
 

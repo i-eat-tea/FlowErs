@@ -19,6 +19,8 @@ interface AppointmentsViewProps {
   onToggleComplete: (id: string) => void;
   onDeleteAppointment: (id: string) => void;
   lang: 'en' | 'kh';
+  profile?: { pregnancy?: { edd?: string; lmp?: string }; personal?: { name?: string } };
+  currentWeek?: number;
 }
 
 const APPOINTMENT_TYPES: { id: Appointment['type']; labelEn: string; labelKh: string; emoji: string; iconColor: string }[] = [
@@ -78,20 +80,22 @@ export default function AppointmentsView({
   onUpdateAppointment,
   onToggleComplete,
   onDeleteAppointment,
-  lang
+  lang,
+  profile,
+  currentWeek
 }: AppointmentsViewProps) {
   const t = TRANSLATIONS[lang];
 
   // Calendar View Mode: 'month' | 'week'
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
 
-  // Currently navigated Year/Month in Month View (default to September 2026 or current active date)
+  // Currently navigated Year/Month in Month View (default to today / pregnancy week)
   const [currentDate, setCurrentDate] = useState(() => {
-    return new Date(2026, 8, 1); // September 2026
+    return new Date();
   });
 
-  // Selected single date for inspecting appointments (default to 2026-09-04 or today)
-  const [selectedDateStr, setSelectedDateStr] = useState<string>('2026-09-04');
+  // Selected single date for inspecting appointments (default today)
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(() => formatDateToISO(new Date()));
 
   // Add / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -105,8 +109,14 @@ export default function AppointmentsView({
   const [formNotes, setNotes] = useState('');
   const [formReminder, setFormReminder] = useState<Appointment['reminder']>('1_day');
 
-  // Today Date string
-  const todayStr = useMemo(() => formatDateToISO(new Date(2026, 8, 1)), []);
+  // Daily reminders (date -> {note, task, reminderText})
+  const [dailyReminders, setDailyReminders] = useState<Record<string, { note?: string; task?: string; reminderText?: string }>>(() => {
+    const saved = localStorage.getItem('flowers_daily_reminders');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  // Today Date string (dynamic)
+  const todayStr = useMemo(() => formatDateToISO(new Date()), []);
 
   // Quick helper: appointments mapped by date string
   const appointmentsByDate = useMemo(() => {
@@ -168,7 +178,7 @@ export default function AppointmentsView({
   };
 
   const handleGoToToday = () => {
-    const d = new Date(2026, 8, 4); // September 4, 2026 demo anchor
+    const d = new Date();
     setCurrentDate(new Date(d.getFullYear(), d.getMonth(), 1));
     setSelectedDateStr(formatDateToISO(d));
   };
@@ -538,6 +548,8 @@ export default function AppointmentsView({
               {calendarMonthGrid.map((cell, idx) => {
                 const isSelected = cell.dateStr === selectedDateStr;
                 const isToday = cell.dateStr === todayStr;
+                const isPast = cell.dateStr < todayStr;
+                const isPregnancyPeriod = (() => { if (!profile || !profile.pregnancy || !profile.pregnancy.edd || !profile.pregnancy.lmp) return false; return cell.dateStr >= profile.pregnancy.lmp && cell.dateStr <= profile.pregnancy.edd; })();
                 const apptsOnDate = appointmentsByDate[cell.dateStr] || [];
                 const hasAppt = apptsOnDate.length > 0;
                 const hasUltrasound = apptsOnDate.some(a => a.type === 'Ultrasound');
@@ -552,6 +564,10 @@ export default function AppointmentsView({
                         ? 'bg-gradient-to-br from-[#FA6B90] to-[#F4A6B5] text-white border-[#FA6B90] shadow-sm scale-[1.02] z-10'
                         : isToday
                         ? 'bg-[#AEE3D8]/25 border-2 border-[#7ECBBF] text-[#2F6F8F]'
+                        : isPast
+                        ? 'bg-gray-50 text-gray-300 border-transparent hover:bg-gray-50 line-through opacity-60'
+                        : isPregnancyPeriod
+                        ? 'bg-gradient-to-br from-[#AEE3D8]/40 to-[#FDDEEC]/50 border-[#AEE3D8] text-[#2F6F8F] ring-1 ring-[#AEE3D8]/40'
                         : cell.isCurrentMonth
                         ? 'bg-[#FEFAFB] hover:bg-[#FDDEEC]/40 border-[#FDDEEC] text-[#2F6F8F]'
                         : 'bg-gray-50/40 text-gray-300 border-transparent hover:bg-gray-50'
@@ -572,9 +588,8 @@ export default function AppointmentsView({
                         {lang === 'kh' ? toKhmerNumber(cell.date.getDate()) : cell.date.getDate()}
                       </span>
 
-                      {isToday && !isSelected && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#7ECBBF]" title="Today" />
-                      )}
+                      {isToday && !isSelected && (<span className="w-1.5 h-1.5 rounded-full bg-[#7ECBBF]" title="Today" />)}
+                      {isPregnancyPeriod && !isSelected && (<span className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-[#FA6B90] to-[#AEE3D8]" title="Pregnancy Period" />)}
                     </div>
 
                     {/* Bottom Indicator for Appointments */}
@@ -750,6 +765,19 @@ export default function AppointmentsView({
             <Plus className="w-3.5 h-3.5" />
             <span>{lang === 'en' ? 'Add for this day' : 'បន្ថែមសម្រាប់ថ្ងៃនេះ'}</span>
           </button>
+        </div>
+
+        {/* Daily Reminder / Note */}
+        <div className="bg-[#FEFAFB] rounded-2xl border border-[#FDDEEC] p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <h5 className="text-[10px] font-black uppercase text-[#2F6F8F]/70 tracking-wider">Daily Note / Reminder</h5>
+            <button onClick={() => { const n = (dailyReminders[selectedDateStr]?.note || ''); const t = (dailyReminders[selectedDateStr]?.task || ''); setDailyReminders({ ...dailyReminders, [selectedDateStr]: { note: n, task: t, reminderText: (n || t || '') } }); localStorage.setItem('flowers_daily_reminders', JSON.stringify({ ...dailyReminders, [selectedDateStr]: { note: n, task: t, reminderText: (n || t || '') } })); }} className="text-[9px] font-black text-[#FA6B90] hover:underline">Save</button>
+          </div>
+          <input type="text" placeholder="Task / reminder ..." value={dailyReminders[selectedDateStr]?.task || ''} onChange={e => setDailyReminders({ ...dailyReminders, [selectedDateStr]: { ...(dailyReminders[selectedDateStr] || {}), task: e.target.value } })} className="w-full p-2 rounded-lg border border-[#FDDEEC] text-[11px] bg-white" />
+          <textarea rows={2} placeholder="Note ..." value={dailyReminders[selectedDateStr]?.note || ''} onChange={e => setDailyReminders({ ...dailyReminders, [selectedDateStr]: { ...(dailyReminders[selectedDateStr] || {}), note: e.target.value } })} className="w-full p-2 rounded-lg border border-[#FDDEEC] text-[11px] bg-white resize-none" />
+          {(dailyReminders[selectedDateStr]?.note || dailyReminders[selectedDateStr]?.task) && (
+            <div className="text-[10px] text-[#FA6B90] font-bold bg-[#FDDEEC]/40 rounded-lg px-2 py-1">📌 {dailyReminders[selectedDateStr]?.task || ''} {dailyReminders[selectedDateStr]?.note ? ' — ' + dailyReminders[selectedDateStr]?.note : ''}</div>
+          )}
         </div>
 
         {selectedDateAppointments.length === 0 ? (
