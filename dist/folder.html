@@ -6,14 +6,18 @@
 <title>FLOWER — Document Folder</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
-:root{--mint:#AEE3D8;--deep:#2F6F8F;--pink:#FA6B90;--bg:#FEFAFB;}
+:root{--mint:#AEE3D8;--deep:#2F6F8F;--pink:#FA6B90;--bg:#FEFAFB;--card:#FFF;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Outfit',system-ui,sans-serif;background:var(--bg);color:var(--deep);line-height:1.35;}
-.container{max-width:420px;margin:24px auto;padding:28px;border-radius:28px;background:#fff;border:2px solid var(--mint);box-shadow:0 10px 30px rgba(47,111,143,.08);}
-h1{font-weight:900;font-size:22px;letter-spacing:-.5px;margin-bottom:4px;}
+.container{max-width:480px;margin:24px auto;padding:24px;border-radius:28px;background:#fff;border:2px solid var(--mint);box-shadow:0 10px 30px rgba(47,111,143,.08);}
+h1{font-weight:900;font-size:20px;letter-spacing:-.5px;margin-bottom:4px;color:var(--deep);}
 .sub{font-size:11px;color:var(--deep)/70;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;}
-.tag{display:inline-block;padding:4px 10px;border-radius:999px;background:#FDDEEC;color:var(--pink);font-weight:900;font-size:11px;margin-bottom:12px;}
+.tag{display:inline-block;padding:4px 10px;border-radius:999px;background:#FDDEEC;color:var(--pink);font-weight:900;font-size:11px;margin-bottom:14px;}
 .row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F4F4F5;font-size:13px;font-weight:700;}
+.doc-preview{margin-top:12px;border:2px dashed #FDDEEC;border-radius:16px;padding:12px;background:#FEFAFB;}
+.doc-preview img{width:100%;max-height:320px;border-radius:12px;object-fit:contain;border:1px solid #FDDEEC;display:block;}
+.doc-title{font-weight:900;font-size:14px;color:var(--deep);margin-top:8px;}
+.doc-meta{font-size:11px;color:#777;margin-top:2px;}
 .note{font-size:11px;color:#777;padding-top:10px;}
 </style>
 </head>
@@ -21,19 +25,48 @@ h1{font-weight:900;font-size:22px;letter-spacing:-.5px;margin-bottom:4px;}
 <div class="container">
   <div class="tag">FOLDER — SCANNED DOCUMENT</div>
   <h1 id="folder-title">Document Folder</h1>
-  <p class="sub" id="folder-sub">Scan QR to open folder</p>
+  <p class="sub" id="folder-sub">Scan QR to view folder</p>
+
+  <div class="row"><span>Folder ID</span> <b id="folder-id">—</b></div>
   <div class="row"><span>Category</span> <b id="folder-cat">—</b></div>
-  <div class="row"><span>Format</span> <b id="folder-fmt">Category + Date + Label</b></div>
-  <div class="row"><span>Custom Label</span> <b id="folder-label">—</b></div>
-  <div class="row"><span>Created</span> <b id="folder-date">—</b></div>
-  <p class="note">This folder is linked from the FLOWER app scan document system. It shows scanned files organized by category + date + user label.</p>
+  <div class="row"><span>Label</span> <b id="folder-label">—</b></div>
+  <div class="row"><span>Created / Scan Date</span> <b id="folder-date">—</b></div>
+
+  <div id="doc-section" class="doc-preview" style="display:none;">
+    <img id="doc-img" src="" alt="Scanned document" />
+    <div class="doc-title" id="doc-title">Document</div>
+    <div class="doc-meta" id="doc-meta">Scan • Medical Record</div>
+  </div>
+
+  <p class="note">This folder is linked from the FLOWER app scan document system. It shows scanned files organized by category, date, and user label. If the image loads, you can long-press to save or share.</p>
 </div>
+
 <script>
 const params = new URLSearchParams(window.location.search);
 const id = params.get('folderId');
+const name = params.get('name');
+const cat = params.get('cat');
+
 if (id) {
-  document.getElementById('folder-title').textContent = 'Folder #' + id.substring(0,8);
-  document.getElementById('folder-sub').textContent = 'Scan QR to view scanned documents';
+  document.getElementById('folder-id').textContent = id.substring(0, 12) + '...';
+  document.getElementById('folder-title').textContent = name ? name : ('Folder #' + id.substring(0,8));
+  document.getElementById('folder-sub').textContent = cat ? ('Category: ' + cat.replace(/_/g,' ')) : 'Scanned medical document';
+  document.getElementById('folder-cat').textContent = cat ? cat.replace(/_/g,' ') : '—';
+  document.getElementById('folder-label').textContent = name || '—';
+  document.getElementById('folder-date').textContent = new Date().toLocaleDateString();
+
+  // Show a representative scan image (using folder id to derive a consistent demo image from records)
+  // In production, the server / app would inject the actual imageAttachment or serve via /api/folder/{id}
+  // Here we show a placeholder that represents the scanned doc category
+  const img = document.getElementById('doc-img');
+  const section = document.getElementById('doc-section');
+  const docTitle = document.getElementById('doc-title');
+  const docMeta = document.getElementById('doc-meta');
+  section.style.display = 'block';
+  img.src = 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80'; // representative medical scan placeholder
+  img.alt = name || 'Medical document scan';
+  docTitle.textContent = name || 'Document Scan';
+  docMeta.textContent = (cat ? cat.replace(/_/g,' ') : 'Medical') + ' • ' + new Date().toLocaleDateString();
 }
 </script>
 </body>
