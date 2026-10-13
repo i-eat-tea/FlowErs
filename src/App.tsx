@@ -140,10 +140,7 @@ export default function App() {
   const [selectedPatientAppointments, setSelectedPatientAppointments] = useState<Appointment[]>([]);
   const [isDoctorDataLoaded, setIsDoctorDataLoaded] = useState(false);
 
-  // User-uploaded profile image stored locally
-  const [userImageUrl, setUserImageUrl] = useState<string | null>(() => {
-    return localStorage.getItem('flowers_user_image_url') || null;
-  });
+  // Active Tab: 4 MVP tabs strictly
   const [activeTab, setActiveTab] = useState<'home' | 'records' | 'calendar' | 'passport' | 'family'>('home');
 
   // Modal Overlays
@@ -402,12 +399,6 @@ export default function App() {
     setSelectedRecordId(record.id);
     setActiveTab('records');
   };
-
-  // User image upload/storage handler
-  const handleSetUserImage = useCallback((imageUrl: string) => {
-    setUserImageUrl(imageUrl);
-    localStorage.setItem('flowers_user_image_url', imageUrl);
-  }, []);
 
   // ─── Auth Handlers ─────────────────────────────────────────────────────────
 
@@ -789,8 +780,6 @@ export default function App() {
             }}
             lang={lang}
             selectedRecordId={selectedRecordId}
-            userImageUrl={userImageUrl}
-            onSetUserImage={handleSetUserImage}
           />
         )}
 

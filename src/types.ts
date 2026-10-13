@@ -137,7 +137,6 @@ export interface Appointment {
   reminder?: ReminderOption;
   completed: boolean;
   imageAttachment?: string;
-  userImageUrl?: string; // User-uploaded profile/record image
   createdAt?: string;
 }
 
