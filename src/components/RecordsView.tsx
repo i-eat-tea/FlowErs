@@ -8,9 +8,10 @@ import {
   FileText, Plus, Search, Filter, Camera, Eye, Trash2, X,
   Calendar, MapPin, User, ChevronRight, UploadCloud, Tag,
   CheckCircle, AlertTriangle, Clock, Share2, Download,
-  Flower2, Building, Folder2
+  Flower2, Building, Folder
 } from 'lucide-react';
 import { MedicalRecord, RecordCategory, DocumentFolder, FolderQRData } from '../types';
+import { QRCodeCanvas } from 'qrcode.react';
 import { TRANSLATIONS } from '../data';
 
 interface RecordsViewProps {
@@ -50,6 +51,7 @@ export default function RecordsView({
   const [activeTrimester, setActiveTrimester] = useState<'all' | 1 | 2 | 3>('all');
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [showQRModal, setShowQRModal] = useState<string | null>(null);
+  const [folderQRData, setFolderQRData] = useState<FolderQRData | null>(null);
 
   // Detail & Lightbox states
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(selectedRecordId || null);
@@ -425,13 +427,26 @@ export default function RecordsView({
                           className="flex items-center space-x-0.5 px-2 py-0.5 rounded-md bg-[#AEE3D8]/20 text-[#2F6F8F] font-bold hover:bg-[#AEE3D8]/40 transition-colors cursor-pointer"
                           title={record.category || 'other'}
                         >
-                          <Folder2 className="w-3 h-3" />
+                          <Folder className="w-3 h-3" />
                           <span className="uppercase text-[8px]">{(record.category || 'other').replace(/_/g, ' ')}</span>
                         </button>
 
                         {/* Share QR button */}
                         <button
-                          onClick={(e) => { e.stopPropagation(); /* share QR logic */ }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFolderQRData({
+                              folderId: `folder-${record.id}`,
+                              motherProfileId: 'current-user',
+                              category: record.category || 'folder',
+                              folderName: record.title,
+                              previewData: {
+                                category: (record.category || 'folder').replace(/_/g, ' '),
+                                date: record.date || record.examDate || '',
+                                label: record.title,
+                              },
+                            });
+                          }}
                           className="flex items-center space-x-0.5 px-2 py-0.5 rounded-md bg-[#FDDEEC] text-[#FA6B90] font-black hover:bg-[#F5B1CE] transition-colors cursor-pointer"
                           title="Share QR"
                         >
@@ -503,6 +518,56 @@ export default function RecordsView({
           <p className="text-[#FEFAFB] text-xs mt-3 font-semibold font-heading">
             {lang === 'en' ? 'Digitized Medical Record Photo' : 'រូបថតឯកសារវេជ្ជសាស្ត្រឌីជីថល'}
           </p>
+        </div>
+      )}
+
+      {/* Folder / Record Share QR Preview Modal */}
+      {folderQRData && (
+        <div
+          className="fixed inset-0 bg-[#2F6F8F]/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 animate-in fade-in duration-200"
+          id="folder-qr-modal"
+        >
+          <button
+            onClick={() => setFolderQRData(null)}
+            className="absolute top-4 right-4 p-2.5 bg-white/20 hover:bg-white/30 text-white rounded-full cursor-pointer transition-all shadow-xl"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+
+          <div className="bg-white rounded-3xl border-2 border-[#AEE3D8] shadow-2xl p-6 max-w-sm w-full text-center space-y-4">
+            <h4 className="text-base font-black text-[#2F6F8F] font-heading">
+              {folderQRData.folderName}
+            </h4>
+            <p className="text-[11px] text-[#2F6F8F]/70 font-semibold">
+              {folderQRData.previewData.category} · {folderQRData.previewData.date} · {folderQRData.previewData.label}
+            </p>
+
+            <div className="bg-[#FEFAFB] rounded-2xl border border-[#FDDEEC] p-4 inline-block shadow-inner">
+              <QRCodeCanvas
+                value={`https://flowers-qrr1.onrender.com/folder.html?folderId=${encodeURIComponent(folderQRData.folderId)}&name=${encodeURIComponent(folderQRData.folderName)}&cat=${encodeURIComponent(folderQRData.previewData.category)}`}
+                size={200}
+                level="M"
+                includeMargin={true}
+                bgColor="#FEFAFB"
+                fgColor="#2F6F8F"
+              />
+            </div>
+
+            <p className="text-[10px] text-[#CFADB9] font-medium">
+              {lang === 'en' ? 'Scan to view this document folder' : 'ស្កេនដើម្បីមើលថតឯកសារ'}
+            </p>
+
+            <button
+              onClick={() => {
+                const url = `https://flowers-qrr1.onrender.com/folder.html?folderId=${folderQRData.folderId}`;
+                window.open(url, '_blank');
+                setFolderQRData(null);
+              }}
+              className="w-full py-3 bg-[#FA6B90] hover:bg-[#f05e84] text-white rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer shadow-3xs transition-all"
+            >
+              {lang === 'en' ? 'Open Folder' : 'បើកថត'}
+            </button>
+          </div>
         </div>
       )}
 
