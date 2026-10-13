@@ -8,7 +8,7 @@ import {
   FileText, Plus, Search, Filter, Camera, Eye, Trash2, X,
   Calendar, MapPin, User, ChevronRight, UploadCloud, Tag,
   CheckCircle, AlertTriangle, Clock, Share2, Download,
-  Flower2, Building
+  Flower2, Building, Folder2
 } from 'lucide-react';
 import { MedicalRecord, RecordCategory, DocumentFolder, FolderQRData } from '../types';
 import { TRANSLATIONS } from '../data';
@@ -47,9 +47,10 @@ export default function RecordsView({
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState<'all' | RecordCategory>('all');
   const [activeTrimester, setActiveTrimester] = useState<'all' | 1 | 2 | 3>('all');
-  
+  const [activeFolder, setActiveFolder] = useState<string | null>(null);
+  const [showQRModal, setShowQRModal] = useState<string | null>(null);
+
   // Detail & Lightbox states
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(selectedRecordId || null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -59,13 +60,11 @@ export default function RecordsView({
   const filteredRecords = useMemo(() => {
     return records
       .filter(record => {
-        // Category filter
-        if (activeCategory !== 'all') {
+        // Category filter (folder-style)
+        if (activeFolder != null) {
           const recCat = (record.category || '').toLowerCase().replace(/[\s-]/g, '_');
-          const targetCat = activeCategory.toLowerCase().replace(/[\s-]/g, '_');
-          if (recCat !== targetCat) {
-            return false;
-          }
+          const folderCat = activeFolder.toLowerCase().replace(/[\s-]/g, '_');
+          if (recCat !== folderCat) return false;
         }
         // Trimester filter
         if (activeTrimester !== 'all') {
@@ -98,7 +97,7 @@ export default function RecordsView({
         const dateB = b.date || b.examDate || b.createdAt || '';
         return new Date(dateB).getTime() - new Date(dateA).getTime();
       });
-  }, [records, activeCategory, activeTrimester, searchQuery]);
+  }, [records, activeFolder, activeTrimester, searchQuery]);
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -174,31 +173,48 @@ export default function RecordsView({
         )}
       </div>
 
-      {/* 3. CATEGORY FILTER TABS */}
-      <div className="flex space-x-1.5 overflow-x-auto pb-1 no-scrollbar text-xs">
-        {CATEGORY_TABS.map(tab => {
+      {/* 3. FOLDER-STYLE CATEGORY BAR */}
+      <div className="flex space-x-2 overflow-x-auto pb-2 no-scrollbar text-xs">
+        <button
+          onClick={() => setActiveFolder(null)}
+          className={`px-3 py-2 rounded-xl font-black text-[11px] flex items-center space-x-1.5 whitespace-nowrap transition-all border shadow-3xs cursor-pointer shrink-0 ${
+            activeFolder === null ? 'bg-[#AEE3D8] text-[#2F6F8F] border-[#7ECBBF]' : 'bg-white text-[#2F6F8F] border-[#FDDEEC] hover:border-[#AEE3D8]'
+          }`}
+        >
+          <span>📁</span>
+          <span>All</span>
+        </button>
+        {CATEGORY_TABS.filter(t => t.id !== 'all').map(tab => {
           const count = categoryCounts[tab.id] || 0;
-          const isActive = activeCategory === tab.id;
+          const isActive = activeFolder === tab.id;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveCategory(tab.id)}
-              className={`px-3 py-1.5 rounded-full font-black text-[10.5px] uppercase tracking-wider flex items-center space-x-1.5 whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                isActive 
-                  ? 'bg-[#AEE3D8] text-[#2F6F8F] border border-[#7ECBBF] shadow-3xs' 
-                  : 'bg-white text-[#2F6F8F] border border-[#FDDEEC] hover:border-[#AEE3D8]'
+              onClick={() => setActiveFolder(tab.id)}
+              className={`px-3 py-2 rounded-xl font-black text-[11px] flex items-center space-x-1.5 whitespace-nowrap transition-all border shadow-3xs cursor-pointer shrink-0 ${
+                isActive ? 'bg-[#AEE3D8] text-[#2F6F8F] border-[#7ECBBF]' : 'bg-white text-[#2F6F8F] border-[#FDDEEC] hover:border-[#AEE3D8]'
               }`}
             >
               <span>{tab.emoji}</span>
               <span>{lang === 'en' ? tab.labelEn : tab.labelKh}</span>
               {count > 0 && (
-                <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${isActive ? 'bg-white/60 text-[#2F6F8F]' : 'bg-[#AEE3D8]/30 text-[#2F6F8F]'}`}>
+                <span className={`text-[9px] font-mono px-1 rounded-full ${isActive ? 'bg-white/60 text-[#2F6F8F]' : 'bg-[#AEE3D8]/30 text-[#2F6F8F]'}`}>
                   {count}
                 </span>
               )}
             </button>
           );
         })}
+        {/* Folder quick-access button */}
+        <button
+          onClick={() => setActiveFolder('folder')}
+          className={`px-3 py-2 rounded-xl font-black text-[11px] flex items-center space-x-1.5 whitespace-nowrap transition-all border shadow-3xs cursor-pointer shrink-0 ${
+            activeFolder === 'folder' ? 'bg-[#FDDEEC] text-[#FA6B90] border-[#F5B1CE]' : 'bg-white text-[#FA6B90] border-[#FDDEEC] hover:border-[#F5B1CE]'
+          }`}
+        >
+          <span>📂</span>
+          <span>Folders</span>
+        </button>
       </div>
 
       {/* 4. TRIMESTER SEGMENTED PILLS BAR */}
@@ -401,6 +417,28 @@ export default function RecordsView({
                     {/* Card Actions Footer */}
                     <div className="flex items-center justify-between pt-1 text-[10px]">
                       <span className="text-[#CFADB9] font-mono">ID: {record.id}</span>
+
+                      <div className="flex items-center space-x-2">
+                        {/* Folder-style category button */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setActiveFolder(record.category || 'other'); }}
+                          className="flex items-center space-x-0.5 px-2 py-0.5 rounded-md bg-[#AEE3D8]/20 text-[#2F6F8F] font-bold hover:bg-[#AEE3D8]/40 transition-colors cursor-pointer"
+                          title={record.category || 'other'}
+                        >
+                          <Folder2 className="w-3 h-3" />
+                          <span className="uppercase text-[8px]">{(record.category || 'other').replace(/_/g, ' ')}</span>
+                        </button>
+
+                        {/* Share QR button */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); /* share QR logic */ }}
+                          className="flex items-center space-x-0.5 px-2 py-0.5 rounded-md bg-[#FDDEEC] text-[#FA6B90] font-black hover:bg-[#F5B1CE] transition-colors cursor-pointer"
+                          title="Share QR"
+                        >
+                          <Share2 className="w-3 h-3" />
+                          <span>QR</span>
+                        </button>
+                      </div>
                       
                       {deleteConfirmId === record.id ? (
                         <div className="flex items-center space-x-1.5">

@@ -33,6 +33,13 @@ export type LanguagePref = 'en' | 'kh';
 
 // ─── Table 1: users ───────────────────────────────────────────────────────────
 
+export interface ShareLink {
+  id: string;
+  recordId: string;
+  url: string;
+  createdAt: string;
+}
+
 export interface User {
   id: string;
   email: string;
