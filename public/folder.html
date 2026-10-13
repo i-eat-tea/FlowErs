@@ -43,6 +43,11 @@ h1{font-weight:900;font-size:20px;letter-spacing:-.5px;margin-bottom:4px;color:v
 
 <script>
 const params = new URLSearchParams(window.location.search);
+// Fetch from server when available (Task 6b)
+fetch('/api/folder/' + (params.get('folderId') || 'unknown'))
+  .then(r => r.ok ? r.json() : null)
+  .then(data => { if (data && data.name) { document.getElementById('folder-title').textContent = data.name; document.getElementById('folder-sub').textContent = data.category ? 'Category: ' + data.category : 'Scanned document'; } })
+  .catch(() => {});
 const id = params.get('folderId');
 const name = params.get('name');
 const cat = params.get('cat');
