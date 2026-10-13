@@ -501,6 +501,14 @@ export default function App() {
     localStorage.removeItem('flowers_maternal_profile');
     localStorage.removeItem('flowers_medical_records');
     localStorage.removeItem('flowers_maternal_appointments');
+    localStorage.removeItem('flowers_auth_token');
+    localStorage.removeItem('flowers_user_email');
+    localStorage.removeItem('flowers_subscription_tier');
+    localStorage.removeItem('flowers_document_folders');
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('flowers_'))
+      .forEach(k => localStorage.removeItem(k));
+    setSubscriptionTier('free');
   };
 
   const handleSetupComplete = useCallback((setupData: {
