@@ -1548,6 +1548,14 @@ app.delete('/api/family-members/:id', async (req, res) => {
   try { await pool.execute('DELETE FROM family_members WHERE id = ?', [req.params.id]); res.json({ success: true }); } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/folder/:id', async (req, res) => {
+  try {
+    const folderId = req.params.id;
+    // Minimal: return folder metadata only (no real docs table yet)
+    res.json({ id: folderId, name: 'Folder ' + folderId.substring(0, 8), category: 'medical', date: new Date().toISOString() });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Health Check ─────────────────────────────────────────────────────────────
 
 app.get('/api/health', async (req, res) => {
@@ -1555,13 +1563,23 @@ app.get('/api/health', async (req, res) => {
     await pool.execute('SELECT 1');
     res.json({ status: 'ok', database: 'connected', time: new Date().toISOString() });
   } catch {
-    res.json({ status: 'ok', database: 'disconnected', time: new Date().toISOString() });
+    res.status(503).json({ status: 'error', database: 'disconnected', time: new Date().toISOString() });
   }
 });
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
 
 async function startServer() {
+  try {
+    await pool.execute('SELECT 1');
+  } catch (err: any) {
+    const host = process.env.MYSQL_HOST || 'localhost';
+    const port = process.env.MYSQL_PORT || 3306;
+    const db = process.env.MYSQL_DATABASE || 'flowers_db';
+    console.error(`DB CONNECTION FAILED — host=${host} port=${port} database=${db} (password hidden)`);
+    process.exit(1);
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

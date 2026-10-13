@@ -44,11 +44,9 @@ function getStoredUserId(): string {
 async function apiGet<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(path);
-    if (!res.ok) return null;
+    if (!res.ok) { console.error(`[API ERROR] GET ${path} status=${res.status}`); return null; }
     return res.json();
-  } catch {
-    return null;
-  }
+  } catch (e) { console.error(`[API ERROR] GET ${path}`, e); return null; }
 }
 
 async function apiPost<T = any>(path: string, body: unknown): Promise<T | null> {
@@ -64,7 +62,8 @@ async function apiPost<T = any>(path: string, body: unknown): Promise<T | null> 
       return (await res.json()) as T;
     }
     return (await res.text()) as unknown as T;
-  } catch {
+  } catch (e) {
+    console.error(`[API ERROR] POST ${path}`, e);
     return null;
   }
 }
@@ -82,7 +81,8 @@ async function apiPut<T = any>(path: string, body: unknown): Promise<T | null> {
       return (await res.json()) as T;
     }
     return (await res.text()) as unknown as T;
-  } catch {
+  } catch (e) {
+    console.error(`[API ERROR] PUT ${path}`, e);
     return null;
   }
 }
@@ -91,7 +91,8 @@ async function apiDelete(path: string): Promise<boolean> {
   try {
     const res = await fetch(path, { method: 'DELETE' });
     return res.ok;
-  } catch {
+  } catch (e) {
+    console.error(`[API ERROR] DELETE ${path}`, e);
     return false;
   }
 }
