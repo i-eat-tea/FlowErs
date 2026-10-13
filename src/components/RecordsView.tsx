@@ -445,6 +445,7 @@ export default function RecordsView({
                                 date: record.date || record.examDate || '',
                                 label: record.title,
                               },
+                              imageUrl: record.imageAttachment || '',
                             });
                           }}
                           className="flex items-center space-x-0.5 px-2 py-0.5 rounded-md bg-[#FDDEEC] text-[#FA6B90] font-black hover:bg-[#F5B1CE] transition-colors cursor-pointer"
@@ -544,7 +545,7 @@ export default function RecordsView({
 
             <div className="bg-[#FEFAFB] rounded-2xl border border-[#FDDEEC] p-4 inline-block shadow-inner">
               <QRCodeCanvas
-                value={`${window.location.origin}/folder.html?folderId=${encodeURIComponent(folderQRData.folderId)}&name=${encodeURIComponent(folderQRData.folderName)}&cat=${encodeURIComponent(folderQRData.previewData.category)}`}
+                value={`${window.location.origin}/folder.html?folderId=${encodeURIComponent(folderQRData.folderId)}&name=${encodeURIComponent(folderQRData.folderName)}&cat=${encodeURIComponent(folderQRData.previewData.category)}${folderQRData.imageUrl ? '&img=' + encodeURIComponent(folderQRData.imageUrl) : ''}`}
                 size={200}
                 level="M"
                 includeMargin={true}
