@@ -497,7 +497,7 @@ export default function PassportView({
 
             <div className="p-4 bg-white rounded-2xl border border-[#FDDEEC] inline-block shadow-xs">
               <QRCodeCanvas
-                value={`https://flowers-qrr1.onrender.com/passport.html?user=${encodeURIComponent(profile.personal.name || 'Mother')}&blood=${encodeURIComponent(profile.medical.bloodType || '—')}&contact=${encodeURIComponent(profile.medical.emergencyContactPhone || '')}&cname=${encodeURIComponent(profile.medical.emergencyContactName || '')}&edd=${encodeURIComponent(profile.pregnancy.edd || '')}&allergies=${encodeURIComponent(profile.medical.allergies || 'None known')}`}
+                value={`passport|${profile.personal.name || 'Mother'}|${profile.medical.bloodType || '—'}`}
                 size={160}
                 level="M"
                 bgColor="#FFFFFF"

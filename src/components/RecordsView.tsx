@@ -23,6 +23,8 @@ interface RecordsViewProps {
   onGenerateFolderQR?: (folder: DocumentFolder) => void;
   lang: 'en' | 'kh';
   selectedRecordId?: string | null;
+  userImageUrl?: string | null;
+  onSetUserImage?: (url: string) => void;
 }
 
 const CATEGORY_TABS: { id: 'all' | RecordCategory; labelEn: string; labelKh: string; emoji: string }[] = [
@@ -42,7 +44,9 @@ export default function RecordsView({
   onOpenScanRecord,
   onGenerateFolderQR,
   lang,
-  selectedRecordId
+  selectedRecordId,
+  userImageUrl,
+  onSetUserImage
 }: RecordsViewProps) {
   const t = TRANSLATIONS[lang];
 
@@ -172,6 +176,84 @@ export default function RecordsView({
           >
             <X className="w-3.5 h-3.5" />
           </button>
+        )}
+      </div>
+
+      {/* USER IMAGE SET / DISPLAY SECTION */}
+      <div className="bg-white rounded-2xl border border-[#FDDEEC] p-4 shadow-3xs space-y-3">
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 rounded-full bg-[#FDDEEC] text-[#FA6B90] flex items-center justify-center">
+            <Camera className="w-4 h-4" />
+          </div>
+          <h4 className="text-xs font-black uppercase text-[#2F6F8F]">{lang === 'en' ? 'My Image' : 'រូបខ្ញុំ'}</h4>
+        </div>
+
+        {userImageUrl ? (
+          <div className="space-y-2">
+            <div className="relative w-full h-48 rounded-xl overflow-hidden border border-[#AEE3D8] bg-[#FEFAFB]">
+              <img src={userImageUrl} alt="User" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.onchange = (e) => {
+                    const file = (e.target as HTMLInputElement).files?.[0];
+                    if (file && onSetUserImage) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => onSetUserImage(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  };
+                  input.click();
+                }}
+                className="px-3 py-2 bg-[#AEE3D8]/20 text-[#2F6F8F] rounded-xl text-[10px] font-black cursor-pointer hover:bg-[#AEE3D8]/40"
+              >
+                {lang === 'en' ? 'Change Image' : 'เปลี่ยนរូប'}
+              </button>
+              {/* QR under image linking to display page */}
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/folder.html?folderId=user-image&name=MyImage&cat=profile`;
+                  window.open(url, '_blank');
+                }}
+                className="flex items-center space-x-1 px-3 py-2 bg-[#FDDEEC] text-[#FA6B90] rounded-xl text-[10px] font-black cursor-pointer hover:bg-[#F5B1CE]"
+                title={lang === 'en' ? 'View QR' : 'មดู QR'}
+              >
+                <span>QR</span>
+                <span>→</span>
+              </button>
+            </div>
+            <p className="text-[10px] text-[#2F6F8F]/60 font-medium">{lang === 'en' ? 'Image stored locally' : 'រូបถูกเก็บ locally'}</p>
+          </div>
+        ) : (
+          <div className="space-y-3 text-center p-4 bg-[#FEFAFB] rounded-xl border border-dashed border-[#AEE3D8]">
+            <div className="w-16 h-16 mx-auto rounded-full bg-[#FDDEEC] text-[#FA6B90] flex items-center justify-center text-2xl">
+              📷
+            </div>
+            <p className="text-xs text-[#2F6F8F]/75 font-semibold">{lang === 'en' ? 'No image set' : 'ម没有ตั้งหมาย'}</p>
+            <button
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (file && onSetUserImage) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => onSetUserImage(ev.target?.result as string);
+                    reader.readAsDataURL(file);
+                  }
+                };
+                input.click();
+              }}
+              className="px-4 py-2 bg-[#FA6B90] text-white rounded-xl text-xs font-black cursor-pointer hover:bg-[#f05e84] shadow-3xs"
+            >
+              {lang === 'en' ? 'Set Image' : 'ตั้งរូប'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -545,7 +627,7 @@ export default function RecordsView({
 
             <div className="bg-[#FEFAFB] rounded-2xl border border-[#FDDEEC] p-4 inline-block shadow-inner">
               <QRCodeCanvas
-                value={`${window.location.origin}/folder.html?folderId=${encodeURIComponent(folderQRData.folderId)}&name=${encodeURIComponent(folderQRData.folderName)}&cat=${encodeURIComponent(folderQRData.previewData.category)}${folderQRData.imageUrl ? '&img=' + encodeURIComponent(folderQRData.imageUrl) : ''}`}
+                value={folderQRData.folderId + '|' + folderQRData.folderName}
                 size={200}
                 level="M"
                 includeMargin={true}
