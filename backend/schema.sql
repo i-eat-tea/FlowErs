@@ -3,7 +3,7 @@
 CREATE DATABASE IF NOT EXISTS flowers_db;
 USE flowers_db; 
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(36) PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255),
@@ -14,7 +14,7 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE mother_profiles (
+CREATE TABLE IF NOT EXISTS mother_profiles (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL UNIQUE,
     full_name VARCHAR(255),
@@ -26,7 +26,7 @@ CREATE TABLE mother_profiles (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE pregnancy_profiles (
+CREATE TABLE IF NOT EXISTS pregnancy_profiles (
     id VARCHAR(36) PRIMARY KEY,
     mother_profile_id VARCHAR(36) NOT NULL UNIQUE,
     edd DATE,
@@ -38,7 +38,7 @@ CREATE TABLE pregnancy_profiles (
     FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE CASCADE
 );
 
-CREATE TABLE mother_medical_info (
+CREATE TABLE IF NOT EXISTS mother_medical_info (
     id VARCHAR(36) PRIMARY KEY,
     mother_profile_id VARCHAR(36) NOT NULL UNIQUE,
     blood_type VARCHAR(10),
@@ -48,7 +48,7 @@ CREATE TABLE mother_medical_info (
     FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE CASCADE
 );
 
-CREATE TABLE emergency_contacts (
+CREATE TABLE IF NOT EXISTS emergency_contacts (
     id VARCHAR(36) PRIMARY KEY,
     mother_profile_id VARCHAR(36) NOT NULL,
     name VARCHAR(255),
@@ -58,7 +58,7 @@ CREATE TABLE emergency_contacts (
     FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE CASCADE
 );
 
-CREATE TABLE medical_records (
+CREATE TABLE IF NOT EXISTS medical_records (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
     mother_profile_id VARCHAR(36),
@@ -79,7 +79,7 @@ CREATE TABLE medical_records (
     FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE SET NULL
 );
 
-CREATE TABLE appointments (
+CREATE TABLE IF NOT EXISTS appointments (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
     mother_profile_id VARCHAR(36),
@@ -98,7 +98,7 @@ CREATE TABLE appointments (
     FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE SET NULL
 );
 
-CREATE TABLE doctor_profiles (
+CREATE TABLE IF NOT EXISTS doctor_profiles (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL UNIQUE,
     license_number VARCHAR(100),
@@ -109,7 +109,7 @@ CREATE TABLE doctor_profiles (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE hospital_profiles (
+CREATE TABLE IF NOT EXISTS hospital_profiles (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL UNIQUE,
     name VARCHAR(255),
@@ -121,7 +121,7 @@ CREATE TABLE hospital_profiles (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE sharing_permissions (
+CREATE TABLE IF NOT EXISTS sharing_permissions (
     id VARCHAR(36) PRIMARY KEY,
     mother_profile_id VARCHAR(36) NOT NULL,
     doctor_profile_id VARCHAR(36),
@@ -135,7 +135,13 @@ CREATE TABLE sharing_permissions (
     CHECK (doctor_profile_id IS NOT NULL OR hospital_profile_id IS NOT NULL)
 );
 
-CREATE TABLE family_members (
+CREATE TABLE IF NOT EXISTS profiles (
+    user_id VARCHAR(36) PRIMARY KEY,
+    data JSON NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS family_members (
     id VARCHAR(36) PRIMARY KEY,
     mother_profile_id VARCHAR(36) NOT NULL,
     name VARCHAR(255),
