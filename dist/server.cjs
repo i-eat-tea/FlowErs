@@ -624,6 +624,32 @@ app.get("/api/records/:userId/:recordId", async (req, res) => {
     res.status(500).json({ error: "Database error" });
   }
 });
+app.get("/api/folder/:folderId", async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const folderRecordId = folderId.replace(/^folder-/, "");
+    if (!folderRecordId) return res.status(404).json({ error: "Invalid folder id" });
+    const [rows] = await pool.execute(
+      `SELECT id, title, category, date, week, notes, image_attachment FROM medical_records WHERE id = ?`,
+      [folderRecordId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Folder not found" });
+    const r = rows[0];
+    res.json({
+      folderId,
+      title: r.title,
+      category: r.category,
+      date: r.date,
+      week: r.week,
+      notes: r.notes,
+      imageAttachment: r.image_attachment,
+      imageUrl: r.image_attachment
+    });
+  } catch (err) {
+    console.error("GET /api/folder error:", err.message);
+    res.status(500).json({ error: "Database error" });
+  }
+});
 app.post("/api/records", async (req, res) => {
   try {
     const {
