@@ -17,13 +17,13 @@ export default function UpgradeModal({ isOpen, onClose, onUpgrade, lang, feature
   const t = lang === 'en' ? {
     title: 'Upgrade to Premium',
     subtitle: `Unlock ${feature}`,
-    features: ['Unlimited medical records', 'Family member access', 'Secure hospital sharing', 'Cloud backup', 'Emergency profile'],
+    features: ['Unlimited medical records', 'Secure hospital sharing', 'Cloud backup', 'Emergency profile'],
     cta: 'Upgrade Now',
     cancel: 'Maybe Later',
   } : {
     title: '升级到高级版',
     subtitle: `解锁 ${feature}`,
-    features: ['无限医疗记录', '家庭成员访问', '医院安全共享', '云备份', '紧急档案'],
+    features: ['无限医疗记录', '医院安全共享', '云备份', '紧急档案'],
     cta: '立即升级',
     cancel: '稍后再说',
   };

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Home, FileText, Calendar, User, Plus, Camera, Flower2, LogOut, Users } from 'lucide-react';
+import { Home, FileText, Calendar, User, Plus, Camera, Flower2, LogOut, Info } from 'lucide-react';
 
 // Data and Types
 import { PassportProfile, MedicalRecord, Appointment, UserRole, MotherProfile, PregnancyProfile, MedicalRecord as NewMedicalRecord, PatientSummary, SubscriptionTier, DocumentFolder } from './types';
@@ -26,7 +26,7 @@ import AddRecordModal from './components/AddRecordModal';
 import JourneySummaryReport from './components/JourneySummaryReport';
 import LoginView from './components/LoginView';
 import PregnancySetupWizard from './components/PregnancySetupWizard';
-import FamilyAccessView from './components/FamilyAccessView';
+import InfoAccessView from './components/InfoAccessView';
 import UpgradeModal from './components/UpgradeModal';
 
 // Components — Doctor
@@ -145,7 +145,7 @@ export default function App() {
   const [isDoctorDataLoaded, setIsDoctorDataLoaded] = useState(false);
 
   // Active Tab: 4 MVP tabs strictly
-  const [activeTab, setActiveTab] = useState<'home' | 'records' | 'calendar' | 'passport' | 'family'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'records' | 'calendar' | 'passport' | 'info'>('home');
 
   // Modal Overlays
   const [emergencyOpen, setEmergencyOpen] = useState(false);
@@ -817,31 +817,10 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'family' && (
-          <FamilyAccessView
-            motherProfileId={userId || 'mother-001'}
-            lang={lang}
-            onAdd={async (member) => {
-              await fetch('/api/family-members', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(member)
-              });
-            }}
-            onUpdate={async (m) => {
-              await fetch(`/api/family-members/${m.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: m.name, phone: m.phone, relation: m.relation, canEdit: m.canEdit })
-              });
-            }}
-            onDelete={async (id) => {
-              await fetch(`/api/family-members/${id}`, { method: 'DELETE' });
-            }}
-          />
-        )}
+                {/* TAB: INFORMATION ACCESS (Telegram bot + information portal) */}
+        {activeTab === 'info' && <InfoAccessView lang={lang} />}
 
-        {/* TAB 4: ⚘ PASSPORT (UNIFIED PROFILE & MATERNAL PASSPORT) */}
+{/* TAB 4: ⚘ PASSPORT (UNIFIED PROFILE & MATERNAL PASSPORT) */}
         {activeTab === 'passport' && (
           <PassportView
             profile={profile}
@@ -913,23 +892,20 @@ export default function App() {
             </span>
           </button>
 
-          {/* Family Tab */}
+          {/* Information Tab */}
           <button
-            onClick={() => {
-              if (subscriptionTier === 'free') { setShowUpgradeModal(true); return; }
-              setActiveTab('family');
-            }}
+            onClick={() => setActiveTab('info')}
             className={`flex flex-col items-center justify-center py-1 cursor-pointer transition-colors ${
-              activeTab === 'family' ? 'text-[#2F6F8F]' : 'text-[#CFADB9] hover:text-[#2F6F8F]'
+              activeTab === 'info' ? 'text-[#2F6F8F]' : 'text-[#CFADB9] hover:text-[#2F6F8F]'
             }`}
             style={{ minHeight: '42px' }}
-            id="tab-family"
+            id="tab-info"
           >
-            <div className={`p-1 rounded-full transition-all ${activeTab === 'family' ? 'bg-[#AEE3D8] shadow-3xs' : ''}`}>
-              <Users className={`w-5 h-5 ${activeTab === 'family' ? 'text-[#2F6F8F] stroke-[2.5]' : ''}`} />
+            <div className={`p-1 rounded-full transition-all ${activeTab === 'info' ? 'bg-[#AEE3D8] shadow-3xs' : ''}`}>
+              <Info className={`w-5 h-5 ${activeTab === 'info' ? 'text-[#2F6F8F] stroke-[2.5]' : ''}`} />
             </div>
-            <span className={`text-[8px] mt-0.5 uppercase tracking-tight ${activeTab === 'family' ? 'font-black text-[#2F6F8F]' : 'font-semibold'}`}>
-              {t.family}
+            <span className={`text-[8px] mt-0.5 uppercase tracking-tight ${activeTab === 'info' ? 'font-black text-[#2F6F8F]' : 'font-semibold'}`}>
+              {t.info}
             </span>
           </button>
 

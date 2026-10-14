@@ -186,7 +186,7 @@ export const TRANSLATIONS = {
     home: "Home",
     records: "My Records",
     calendar: "Calendar",
-    family: "Family",
+    info: "Info",
     passport: "Passport",
     emergency: "SOS",
 
@@ -323,7 +323,7 @@ export const TRANSLATIONS = {
     home: "ទំព័រដើម",
     records: "កំណត់ត្រាខ្ញុំ",
     calendar: "ប្រតិទិន",
-    family: "គ្រួសារ",
+    info: "ព័ត៌មាន",
     passport: "លិខិតឆ្លងដែន",
     emergency: "សង្គ្រោះ",
 
