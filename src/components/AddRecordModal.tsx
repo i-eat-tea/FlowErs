@@ -56,23 +56,40 @@ export default function AddRecordModal({
   // Trimester computation based on week
   const trimester: 1 | 2 | 3 = week <= 12 ? 1 : week <= 27 ? 2 : 3;
 
-  const handleFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setImageAttachment(event.target.result as string);
+  async function compressImage(file: File, maxSide = 1280, quality = 0.7): Promise<string> {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * scale);
+    c.height = Math.round(bmp.height * scale);
+    c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', quality);
+  }
 
-        // Smart preset defaults if title is empty
-        if (!title) {
-          if (category === 'ultrasound') setTitle(`Week ${week} Ultrasound Scan`);
-          else if (category === 'lab_test') setTitle(`Prenatal Laboratory Test Result`);
-          else if (category === 'prescription') setTitle(`Doctor Prescription & Vitamins`);
-          else if (category === 'vaccine') setTitle(`Maternal Immunization Record`);
-          else if (category === 'doctor_note') setTitle(`Clinical Consultation Summary`);
+  const handleFile = async (file: File) => {
+    if (file.type.startsWith('image/')) {
+      try {
+        const compressed = await compressImage(file);
+        setImageAttachment(compressed);
+      } catch (e) { console.error('Compression failed', e); }
+    } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setImageAttachment(event.target.result as string);
         }
-      }
-    };
-    reader.readAsDataURL(file);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Smart preset defaults if title is empty
+    if (!title) {
+      if (category === 'ultrasound') setTitle(`Week ${week} Ultrasound Scan`);
+      else if (category === 'lab_test') setTitle(`Prenatal Laboratory Test Result`);
+      else if (category === 'prescription') setTitle(`Doctor Prescription & Vitamins`);
+      else if (category === 'vaccine') setTitle(`Maternal Immunization Record`);
+      else if (category === 'doctor_note') setTitle(`Clinical Consultation Summary`);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -108,6 +125,7 @@ export default function AddRecordModal({
       id: `rec-${Date.now()}`,
       title: title.trim(),
       category,
+      examDate: date,
       date,
       week: Number(week) || currentCalculatedWeek,
       trimester,

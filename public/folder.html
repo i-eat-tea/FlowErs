@@ -42,37 +42,33 @@ h1{font-weight:900;font-size:20px;letter-spacing:-.5px;margin-bottom:4px;color:v
 </div>
 
 <script>
-const params = new URLSearchParams(window.location.search);
-// Fetch from server when available (Task 6b)
-fetch('/api/folder/' + (params.get('folderId') || 'unknown'))
-  .then(r => r.ok ? r.json() : null)
-  .then(data => { if (data && data.name) { document.getElementById('folder-title').textContent = data.name; document.getElementById('folder-sub').textContent = data.category ? 'Category: ' + data.category : 'Scanned document'; } })
-  .catch(() => {});
-const id = params.get('folderId');
-const name = params.get('name');
-const cat = params.get('cat');
-
-if (id) {
-  document.getElementById('folder-id').textContent = id.substring(0, 12) + '...';
-  document.getElementById('folder-title').textContent = name ? name : ('Folder #' + id.substring(0,8));
-  document.getElementById('folder-sub').textContent = cat ? ('Category: ' + cat.replace(/_/g,' ')) : 'Scanned medical document';
-  document.getElementById('folder-cat').textContent = cat ? cat.replace(/_/g,' ') : 'â€”';
-  document.getElementById('folder-label').textContent = name || 'â€”';
-  document.getElementById('folder-date').textContent = new Date().toLocaleDateString();
-
-  // Show a representative scan image (using folder id to derive a consistent demo image from records)
-  // In production, the server / app would inject the actual imageAttachment or serve via /api/folder/{id}
-  // Here we show a placeholder that represents the scanned doc category
-  const img = document.getElementById('doc-img');
-  const section = document.getElementById('doc-section');
-  const docTitle = document.getElementById('doc-title');
-  const docMeta = document.getElementById('doc-meta');
-  section.style.display = 'block';
-  img.src = 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80'; // representative medical scan placeholder
-  img.alt = name || 'Medical document scan';
-  docTitle.textContent = name || 'Document Scan';
-  docMeta.textContent = (cat ? cat.replace(/_/g,' ') : 'Medical') + ' â€¢ ' + new Date().toLocaleDateString();
-}
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var id = params.get('folderId');
+  var $ = function (i) { return document.getElementById(i); };
+  function fail(msg) { $('folder-title').textContent = msg; $('doc-section').style.display = 'none'; }
+  if (!id) return fail('Invalid link');
+  $('folder-id').textContent = id.substring(0, 12) + '...';
+  fetch('/api/folder/' + encodeURIComponent(id))
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (d) {
+      var cat = (d.category || '').replace(/_/g, ' ');
+      var when = d.date ? new Date(d.date).toLocaleDateString() : '';
+      $('folder-title').textContent = d.name || 'Document';
+      $('folder-sub').textContent = cat ? 'Category: ' + cat : 'Scanned medical document';
+      $('folder-cat').textContent = cat || '—';
+      $('folder-label').textContent = d.name || '—';
+      $('folder-date').textContent = when || '—';
+      if (d.imageUrl) {
+        $('doc-img').src = d.imageUrl;
+        $('doc-img').alt = d.name || 'Document scan';
+        $('doc-title').textContent = d.name || 'Document';
+        $('doc-meta').textContent = cat + (when ? ' • ' + when : '');
+        $('doc-section').style.display = 'block';
+      } else { $('doc-section').style.display = 'none'; }
+    })
+    .catch(function () { fail('Document not found or no longer shared'); });
+})();
 </script>
 </body>
 </html>

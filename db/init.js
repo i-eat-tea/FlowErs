@@ -1,25 +1,26 @@
+// SAFE: creates missing tables in MYSQL_DATABASE. Never drops or changes existing data.
+// Usage:  npm run db:init
 import mysql from 'mysql2/promise';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import { connectionConfig } from './helpers.js';
 
 dotenv.config();
 
-async function initDB() {
-  const connection = await mysql.createConnection({
-    host: process.env.MYSQL_HOST || 'localhost',
-    port: parseInt(process.env.MYSQL_PORT || '3306', 10),
-    user: process.env.MYSQL_USER || 'root',
-    password: process.env.MYSQL_PASSWORD || '',
-    multipleStatements: true,
-  });
-
-  const sql = fs.readFileSync('./backend/schema.sql', 'utf-8');
-  await connection.query(sql);
-  console.log('✅ Database and tables created successfully.');
-  await connection.end();
+async function main() {
+  const cfg = connectionConfig();
+  console.log(`Initialising ${cfg.user}@${cfg.host}:${cfg.port}/${cfg.database} (safe, keeps existing data)...`);
+  const conn = await mysql.createConnection(cfg);
+  try {
+    await conn.query(fs.readFileSync(new URL('../backend/schema.sql', import.meta.url), 'utf-8'));
+    const [rows] = await conn.query('SHOW TABLES');
+    console.log(`Done. ${rows.length} tables present.`);
+  } finally {
+    await conn.end();
+  }
 }
 
-initDB().catch(err => {
-  console.error('❌ Database init failed:', err.message);
+main().catch(err => {
+  console.error('Init failed:', err.message);
   process.exit(1);
 });

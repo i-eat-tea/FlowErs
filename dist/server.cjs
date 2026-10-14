@@ -54,16 +54,18 @@ function generateToken(user) {
 function generateId(prefix = "usr") {
   return prefix + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
 }
+var sslOpt = process.env.MYSQL_SSL === "true" ? process.env.MYSQL_SSL_CA ? { ca: process.env.MYSQL_SSL_CA.replace(/\\n/g, "\n"), minVersion: "TLSv1.2" } : { rejectUnauthorized: false, minVersion: "TLSv1.2" } : void 0;
 var pool = import_promise.default.createPool({
   host: process.env.MYSQL_HOST || "localhost",
   port: parseInt(process.env.MYSQL_PORT || "3306", 10),
   user: process.env.MYSQL_USER || "root",
   password: process.env.MYSQL_PASSWORD || "",
-  database: process.env.MYSQL_DATABASE || "flowers_db",
+  database: process.env.MYSQL_DATABASE || "defaultdb",
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  dateStrings: true
+  dateStrings: true,
+  ssl: sslOpt
 });
 async function ensureProfile(userId) {
   await pool.execute(
@@ -1359,15 +1361,40 @@ app.delete("/api/family-members/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get("/api/folder/:id", async (req, res) => {
+  try {
+    const raw = req.params.id;
+    const recordId = raw.startsWith("folder-") ? raw.slice("folder-".length) : raw;
+    const [rows] = await pool.execute(
+      "SELECT id, title, category, date, image_attachment FROM medical_records WHERE id = ? LIMIT 1",
+      [recordId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Not found" });
+    const r = rows[0];
+    res.json({ id: r.id, name: r.title, category: r.category, date: r.date, imageUrl: r.image_attachment || null });
+  } catch (err) {
+    console.error("GET /api/folder error:", err.message);
+    res.status(500).json({ error: "Database error" });
+  }
+});
 app.get("/api/health", async (req, res) => {
   try {
     await pool.execute("SELECT 1");
     res.json({ status: "ok", database: "connected", time: (/* @__PURE__ */ new Date()).toISOString() });
   } catch {
-    res.json({ status: "ok", database: "disconnected", time: (/* @__PURE__ */ new Date()).toISOString() });
+    res.status(503).json({ status: "error", database: "disconnected", time: (/* @__PURE__ */ new Date()).toISOString() });
   }
 });
 async function startServer() {
+  try {
+    await pool.execute("SELECT 1");
+  } catch (err) {
+    const host = process.env.MYSQL_HOST || "localhost";
+    const port = process.env.MYSQL_PORT || 3306;
+    const db = process.env.MYSQL_DATABASE || "flowers_db";
+    console.error(`DB CONNECTION FAILED \u2014 host=${host} port=${port} database=${db} (password hidden)`);
+    console.warn("DB unreachable \u2014 continuing with honest 503 responses");
+  }
   if (process.env.NODE_ENV !== "production") {
     const vite = await (0, import_vite.createServer)({
       server: { middlewareMode: true },

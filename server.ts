@@ -59,16 +59,23 @@ function generateId(prefix = 'usr'): string {
 
 // ─── MySQL Connection Pool ───────────────────────────────────────────────────
 
+const sslOpt = process.env.MYSQL_SSL === 'true'
+  ? (process.env.MYSQL_SSL_CA
+      ? { ca: process.env.MYSQL_SSL_CA.replace(/\\n/g, '\n'), minVersion: 'TLSv1.2' as const }
+      : { rejectUnauthorized: false, minVersion: 'TLSv1.2' as const })
+  : undefined;
+
 const pool = mysql.createPool({
   host: process.env.MYSQL_HOST || 'localhost',
   port: parseInt(process.env.MYSQL_PORT || '3306', 10),
   user: process.env.MYSQL_USER || 'root',
   password: process.env.MYSQL_PASSWORD || '',
-  database: process.env.MYSQL_DATABASE || 'flowers_db',
+  database: process.env.MYSQL_DATABASE || 'defaultdb',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   dateStrings: true,
+  ssl: sslOpt,
 });
 
 // ─── Helper: ensure profile row exists for a user ────────────────────────────
@@ -1550,10 +1557,19 @@ app.delete('/api/family-members/:id', async (req, res) => {
 
 app.get('/api/folder/:id', async (req, res) => {
   try {
-    const folderId = req.params.id;
-    // Minimal: return folder metadata only (no real docs table yet)
-    res.json({ id: folderId, name: 'Folder ' + folderId.substring(0, 8), category: 'medical', date: new Date().toISOString() });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+    const raw = req.params.id;
+    const recordId = raw.startsWith('folder-') ? raw.slice('folder-'.length) : raw;
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      'SELECT id, title, category, date, image_attachment FROM medical_records WHERE id = ? LIMIT 1',
+      [recordId],
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    const r = rows[0];
+    res.json({ id: r.id, name: r.title, category: r.category, date: r.date, imageUrl: r.image_attachment || null });
+  } catch (err: any) {
+    console.error('GET /api/folder error:', err.message);
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
@@ -1577,7 +1593,7 @@ async function startServer() {
     const port = process.env.MYSQL_PORT || 3306;
     const db = process.env.MYSQL_DATABASE || 'flowers_db';
     console.error(`DB CONNECTION FAILED — host=${host} port=${port} database=${db} (password hidden)`);
-    process.exit(1);
+    console.warn("DB unreachable — continuing with honest 503 responses");
   }
 
   if (process.env.NODE_ENV !== 'production') {

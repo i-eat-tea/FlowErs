@@ -103,15 +103,17 @@ export interface EmergencyContact {
 
 export interface MedicalRecord {
   id: string;
-  motherProfileId: string;
+  motherProfileId?: string;
   title: string;
   category: RecordCategory;
   examDate: string;      // YYYY-MM-DD
+  date?: string;         // Legacy/API alias for examDate
   week: number;
   trimester: 1 | 2 | 3;
   facility: string;
   doctor: string;
   notes?: string;
+  imageAttachment?: string;
   imageUrl?: string;    // URL or data URL for scanned document
   status?: RecordStatus;
   tags?: string[];

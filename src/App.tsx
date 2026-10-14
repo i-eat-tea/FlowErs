@@ -42,11 +42,14 @@ function getStoredUserId(): string {
 }
 
 async function apiGet<T>(path: string): Promise<T | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30000); // allows a Render cold start
   try {
-    const res = await fetch(path);
+    const res = await fetch(path, { signal: ctrl.signal });
     if (!res.ok) { console.error(`[API ERROR] GET ${path} status=${res.status}`); return null; }
-    return res.json();
+    return (await res.json()) as T;
   } catch (e) { console.error(`[API ERROR] GET ${path}`, e); return null; }
+  finally { clearTimeout(timer); }
 }
 
 async function apiPost<T = any>(path: string, body: unknown): Promise<T | null> {
@@ -173,6 +176,8 @@ export default function App() {
 
   // Track whether data has been loaded from MySQL to avoid overwriting
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   // ─── Load Doctor Patients from MySQL on mount (only for doctor/hospital_admin) ───
 
@@ -196,8 +201,10 @@ export default function App() {
     if (!isLoggedIn || userRole !== 'mother' || !userId) return;
 
     async function loadFromDB() {
-      // Try new relational endpoint first, fall back to old JSON blob
-      const motherProfileData = await apiGet<{
+      setLoadError(false);
+      try {
+        // Try new relational endpoint first, fall back to old JSON blob
+        const motherProfileData = await apiGet<{
         motherProfile: any;
         pregnancyProfile: any;
         medicalInfo: any;
@@ -272,10 +279,14 @@ export default function App() {
         localStorage.setItem('flowers_maternal_appointments', JSON.stringify(dbAppointments));
       }
       setDataLoaded(true);
+      } catch (e) {
+        console.error('loadFromDB error:', e);
+        setLoadError(true);
+      }
     }
 
     loadFromDB();
-  }, [isLoggedIn, userRole, userId]);
+  }, [isLoggedIn, userRole, userId, loadAttempt]);
 
   // ─── Sync profile to MySQL + localStorage ─────────────────────────────────
 
@@ -836,6 +847,7 @@ export default function App() {
             profile={profile}
             onUpdateProfile={handleUpdateProfile}
             onOpenSummaryReport={() => setShowJourneyReport(true)}
+            onLogout={handleLogout}
             lang={lang}
             calculatedWeeks={pregnancyMetrics.weeks}
             calculatedTrimester={pregnancyMetrics.trimester}

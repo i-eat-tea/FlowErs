@@ -1,7 +1,8 @@
+-- FLOWERS schema (SAFE: re-runnable, never drops data). Database-agnostic: uses the connection's database.
+-- NOTE: the 'doctor OR hospital must be set' rule for sharing_permissions is enforced in server.ts, not in SQL
+--       (MySQL forbids a CHECK on columns used by ON DELETE SET NULL foreign keys).
 -- FLOWER Maternal Health — 10-table DB schema (confirmed by user 2026-09-01)
 -- Split from old PassportProfile (30+ fields in one object)
-CREATE DATABASE IF NOT EXISTS flowers_db;
-USE flowers_db; 
 
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(36) PRIMARY KEY,
@@ -131,8 +132,7 @@ CREATE TABLE IF NOT EXISTS sharing_permissions (
     record_types_granted JSON,
     FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE CASCADE,
     FOREIGN KEY (doctor_profile_id) REFERENCES doctor_profiles(id) ON DELETE SET NULL,
-    FOREIGN KEY (hospital_profile_id) REFERENCES hospital_profiles(id) ON DELETE SET NULL,
-    CHECK (doctor_profile_id IS NOT NULL OR hospital_profile_id IS NOT NULL)
+    FOREIGN KEY (hospital_profile_id) REFERENCES hospital_profiles(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS profiles (
