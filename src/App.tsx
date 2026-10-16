@@ -15,6 +15,9 @@ import {
   TRANSLATIONS
 } from './data';
 
+// Tracking
+import { trackFeature } from './lib/usage';
+
 // Components — Mother
 import Header from './components/Header';
 import EmergencyModal from './components/EmergencyModal';
@@ -335,6 +338,20 @@ export default function App() {
     document.documentElement.lang = lang === 'kh' ? 'km' : 'en';
   }, [lang]);
 
+  // Track tab views (mother only)
+  useEffect(() => {
+    if (!isLoggedIn || userRole !== 'mother') return;
+    const tabFeatureMap: Record<typeof activeTab, any> = {
+      home: 'home_view',
+      records: 'records_view',
+      calendar: 'calendar_view',
+      info: 'info_view',
+      passport: 'passport_view'
+    };
+    const feature = tabFeatureMap[activeTab];
+    if (feature) trackFeature(feature, 'view', { tab: activeTab });
+  }, [activeTab, isLoggedIn, userRole]);
+
   // ========================================================
   // PREGNANCY METRICS CALCULATOR
   // ========================================================
@@ -488,6 +505,7 @@ export default function App() {
   }, [doctorName]);
 
   const handleLogout = () => {
+    trackFeature('logout', 'click');
     setIsLoggedIn(false);
     setUserRole(null);
     setUserId(''); // Clear userId state

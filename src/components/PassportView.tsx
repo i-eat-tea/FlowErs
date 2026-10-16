@@ -11,6 +11,7 @@ import {
 import { QRCodeCanvas } from 'qrcode.react';
 import { PassportProfile } from '../types';
 import { TRANSLATIONS } from '../data';
+import { trackFeature } from '../lib/usage';
 
 const PUBLIC_BASE_URL =
   (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined) || window.location.origin;
@@ -68,7 +69,10 @@ export default function PassportView({
             </div>
 
             <button
-              onClick={() => setShowQRModal(true)}
+              onClick={() => {
+                trackFeature('emergency_qr', 'open');
+                setShowQRModal(true);
+              }}
               className="p-1.5 bg-white/70 hover:bg-white rounded-xl text-[#2F6F8F] cursor-pointer transition-all border border-[#7ECBBF] shadow-3xs"
               title="View Emergency QR"
             >
@@ -132,7 +136,10 @@ export default function PassportView({
         </button>
 
         <button
-          onClick={onOpenSummaryReport}
+          onClick={() => {
+            trackFeature('journey_report', 'open');
+            onOpenSummaryReport();
+          }}
           className="flex-1 py-2.5 px-3 bg-[#FDDEEC] hover:bg-[#FEC7DF] border border-[#F4A6B5] text-[#FA6B90] rounded-xl text-xs font-black uppercase tracking-wide cursor-pointer transition-all shadow-3xs flex items-center justify-center space-x-1.5"
           id="btn-view-maternal-summary"
         >

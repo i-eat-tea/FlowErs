@@ -6,6 +6,7 @@
 import React from 'react';
 import { Flower2, Globe, LogOut } from 'lucide-react';
 import { TRANSLATIONS } from '../data';
+import { trackFeature } from '../lib/usage';
 
 interface HeaderProps {
   lang: 'en' | 'kh';
@@ -16,6 +17,17 @@ interface HeaderProps {
 
 export default function Header({ lang, setLang, onOpenEmergency, onLogout }: HeaderProps) {
   const t = TRANSLATIONS[lang];
+
+  const handleLangSwitch = () => {
+    const newLang = lang === 'en' ? 'kh' : 'en';
+    trackFeature('language_switch', 'click', { lang: newLang });
+    setLang(newLang);
+  };
+
+  const handleSOSClick = () => {
+    trackFeature('emergency_modal', 'open');
+    onOpenEmergency();
+  };
 
   return (
     <>
@@ -38,7 +50,7 @@ export default function Header({ lang, setLang, onOpenEmergency, onLogout }: Hea
           {/* Header actions — language + SOS stay here; logout moves to bottom strip */}
           <div className="flex items-center gap-1.5 shrink-0">
             <button
-              onClick={() => setLang(lang === 'en' ? 'kh' : 'en')}
+              onClick={handleLangSwitch}
               className="flex items-center gap-0.5 px-2 py-1 rounded-full text-[9px] font-bold bg-[#AEE3D8]/30 hover:bg-[#AEE3D8]/60 text-[#2F6F8F] transition-colors cursor-pointer border border-[#AEE3D8]"
               title="Switch Language"
             >
@@ -46,12 +58,12 @@ export default function Header({ lang, setLang, onOpenEmergency, onLogout }: Hea
               <span>{lang === 'en' ? 'KH' : 'EN'}</span>
             </button>
             <button
-              onClick={onOpenEmergency}
+              onClick={handleSOSClick}
               className="flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold bg-[#FDDEEC] border border-[#F4A6B5] text-[#FA6B90] hover:bg-[#FEC7DF] transition-colors cursor-pointer"
               id="btn-emergency-trigger"
             >
               <div className="w-1.5 h-1.5 bg-[#FA6B90] rounded-full animate-pulse" />
-              <span>{lang === 'en' ? 'SOS' : 'ស救'}</span>
+              <span>{lang === 'en' ? 'SOS' : 'សង្គ្រោះ'}</span>
             </button>
           </div>
         </div>
@@ -60,25 +72,25 @@ export default function Header({ lang, setLang, onOpenEmergency, onLogout }: Hea
       {/* Mobile Bottom Quick-Action Strip — easy-access for KH / SOS / Logout */}
       <div className="fixed bottom-[72px] left-0 right-0 z-40 bg-[#FEFAFB]/95 backdrop-blur-md border-t-2 border-[#AEE3D8]/50 grid grid-cols-3 gap-2 py-2 px-3 shadow-xs md:hidden">
         <button
-          onClick={() => setLang(lang === 'en' ? 'kh' : 'en')}
+          onClick={handleLangSwitch}
           className="flex items-center justify-center gap-1 py-2 rounded-full text-xs font-black bg-[#AEE3D8]/30 text-[#2F6F8F] border border-[#AEE3D8] transition-colors"
         >
           <Globe className="w-3.5 h-3.5" />
           {lang === 'en' ? 'KH' : 'EN'}
         </button>
         <button
-          onClick={onOpenEmergency}
+          onClick={handleSOSClick}
           className="flex items-center justify-center gap-1 py-2 rounded-full text-xs font-black bg-[#FDDEEC] text-[#FA6B90] border border-[#FA6B90] shadow-3xs transition-colors"
         >
           <div className="w-2 h-2 bg-[#FA6B90] rounded-full animate-pulse" />
-          {lang === 'en' ? 'SOS' : '救急'}
+          {lang === 'en' ? 'SOS' : 'សង្គ្រោះ'}
         </button>
         <button
           onClick={onLogout}
           className="flex items-center justify-center gap-1 py-2 rounded-full text-xs font-black bg-[#FDDEEC] text-[#FA6B90] border border-[#FA6B90] shadow-3xs transition-colors"
         >
           <LogOut className="w-3.5 h-3.5" />
-          {lang === 'en' ? 'Logout' : 'ログアウト'}
+          {lang === 'en' ? 'Logout' : 'ចាកចេញ'}
         </button>
       </div>
     </>

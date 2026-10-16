@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { MedicalRecord, RecordCategory } from '../types';
 import { TRANSLATIONS } from '../data';
+import { trackFeature } from '../lib/usage';
 
 interface AddRecordModalProps {
   isOpen: boolean;
@@ -221,7 +222,10 @@ export default function AddRecordModal({
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => {
+                    trackFeature('record_scan', 'open');
+                    fileInputRef.current?.click();
+                  }}
                   className={`p-5 rounded-2xl border-2 border-dashed text-center transition-all cursor-pointer ${
                     dragActive
                       ? 'border-[#FA6B90] bg-[#FDDEEC]/50'
