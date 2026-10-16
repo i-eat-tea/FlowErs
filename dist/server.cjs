@@ -29,11 +29,14 @@ var import_vite = require("vite");
 var import_promise = __toESM(require("mysql2/promise"), 1);
 var import_bcryptjs = __toESM(require("bcryptjs"), 1);
 var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
+var import_cookie_parser = __toESM(require("cookie-parser"), 1);
 import_dotenv.default.config();
 var app = (0, import_express.default)();
 var PORT = parseInt(process.env.PORT || "3000", 10);
 var JWT_SECRET = process.env.JWT_SECRET || "flower-maternal-health-secret-key-2026";
 app.use(import_express.default.json({ limit: "50mb" }));
+app.use((0, import_cookie_parser.default)());
+app.set("trust proxy", 1);
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -50,6 +53,18 @@ function authenticateToken(req, res, next) {
 }
 function generateToken(user) {
   return import_jsonwebtoken.default.sign(user, JWT_SECRET, { expiresIn: "7d" });
+}
+function optionalAuth(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (token) {
+    import_jsonwebtoken.default.verify(token, JWT_SECRET, (err, user) => {
+      if (!err && user) req.user = user;
+      next();
+    });
+  } else {
+    next();
+  }
 }
 function generateId(prefix = "usr") {
   return prefix + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
@@ -1375,6 +1390,174 @@ app.get("/api/folder/:id", async (req, res) => {
   } catch (err) {
     console.error("GET /api/folder error:", err.message);
     res.status(500).json({ error: "Database error" });
+  }
+});
+var VALID_FEATURES = /* @__PURE__ */ new Set([
+  "signup",
+  "login",
+  "logout",
+  "setup_wizard",
+  "home_view",
+  "records_view",
+  "calendar_view",
+  "info_view",
+  "passport_view",
+  "record_scan",
+  "record_add",
+  "appointment_add",
+  "info_link",
+  "emergency_modal",
+  "emergency_qr",
+  "journey_report",
+  "language_switch",
+  "upgrade_modal",
+  "walkthrough",
+  "doctor_dashboard",
+  "patient_detail",
+  "doctor_note"
+]);
+var VALID_ACTIONS = /* @__PURE__ */ new Set([
+  "view",
+  "open",
+  "click",
+  "create",
+  "start",
+  "step",
+  "complete",
+  "skip",
+  "replay"
+]);
+var METADATA_WHITELIST = /* @__PURE__ */ new Set([
+  "tab",
+  "step",
+  "total_steps",
+  "category",
+  "type",
+  "target",
+  "tier",
+  "lang",
+  "variant"
+]);
+var usageRateLimits = /* @__PURE__ */ new Map();
+var RATE_LIMIT_WINDOW_MS = 6e4;
+var RATE_LIMIT_MAX_EVENTS = 120;
+function checkRateLimit(sessionId, ip) {
+  const key = sessionId || ip;
+  const now = Date.now();
+  const entry = usageRateLimits.get(key);
+  if (!entry || now > entry.resetAt) {
+    usageRateLimits.set(key, { resetAt: now + RATE_LIMIT_WINDOW_MS, count: 1 });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX_EVENTS) return false;
+  entry.count++;
+  return true;
+}
+async function writeUsageEvent(params) {
+  try {
+    const { userId, role, sessionId, featureKey, action, source, lang, metadata } = params;
+    const filteredMeta = {};
+    if (metadata) {
+      for (const key of Object.keys(metadata)) {
+        if (METADATA_WHITELIST.has(key)) {
+          const value = metadata[key];
+          if (typeof value === "string" && value.length <= 100) {
+            filteredMeta[key] = value;
+          } else if (typeof value === "number") {
+            filteredMeta[key] = value;
+          }
+        }
+      }
+    }
+    const metaJson = Object.keys(filteredMeta).length > 0 ? JSON.stringify(filteredMeta) : null;
+    const metaSize = metaJson ? new Blob([metaJson]).size : 0;
+    if (metaSize > 1024) return;
+    await pool.execute(
+      `INSERT INTO feature_usage (user_id, role, session_id, feature_key, action, source, lang, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [userId, role, sessionId, featureKey, action, source, lang || null, metaJson]
+    );
+  } catch (err) {
+    console.error("[usage] Write failed:", err.message);
+  }
+}
+app.get("/api/consent", (req, res) => {
+  const consent = req.cookies.flowers_consent;
+  if (consent === "accepted" || consent === "declined") {
+    return res.json({ consent });
+  }
+  res.json({ consent: null });
+});
+app.post("/api/consent", async (req, res) => {
+  const { choice } = req.body;
+  if (choice !== "accepted" && choice !== "declined") {
+    return res.status(400).json({ error: "Invalid choice" });
+  }
+  const isProd = process.env.NODE_ENV === "production";
+  const cookieOpts = {
+    path: "/",
+    maxAge: 180 * 24 * 60 * 60 * 1e3,
+    // 180 days
+    sameSite: "lax",
+    httpOnly: false
+  };
+  if (isProd) cookieOpts.secure = true;
+  res.cookie("flowers_consent", choice, cookieOpts);
+  if (choice === "accepted") {
+    if (!req.cookies.flowers_sid) {
+      const crypto = await import("crypto");
+      const sid = crypto.randomBytes(16).toString("hex");
+      const sidOpts = {
+        path: "/",
+        maxAge: 30 * 24 * 60 * 60 * 1e3,
+        // 30 days
+        sameSite: "lax",
+        httpOnly: true
+      };
+      if (isProd) sidOpts.secure = true;
+      res.cookie("flowers_sid", sid, sidOpts);
+    }
+  } else {
+    res.clearCookie("flowers_sid", { path: "/", httpOnly: true });
+  }
+  res.json({ consent: choice });
+});
+app.post("/api/usage", optionalAuth, async (req, res) => {
+  try {
+    const consent = req.cookies.flowers_consent;
+    if (consent !== "accepted") {
+      return res.status(204).send();
+    }
+    const { events } = req.body;
+    if (!Array.isArray(events) || events.length === 0 || events.length > 20) {
+      return res.status(400).json({ error: "Invalid events array" });
+    }
+    const sessionId = req.cookies.flowers_sid || null;
+    const ip = (req.ip || req.connection.remoteAddress || "").replace("::ffff:", "");
+    if (!checkRateLimit(sessionId, ip)) {
+      return res.status(429).json({ error: "Rate limit exceeded" });
+    }
+    const userId = req.user?.id || null;
+    const role = req.user?.role || null;
+    for (const event of events) {
+      const { feature, action, metadata } = event;
+      if (!VALID_FEATURES.has(feature)) continue;
+      if (!VALID_ACTIONS.has(action)) continue;
+      writeUsageEvent({
+        userId,
+        role,
+        sessionId,
+        featureKey: feature,
+        action,
+        source: "client",
+        metadata
+      }).catch(() => {
+      });
+    }
+    res.status(204).send();
+  } catch (err) {
+    console.error("POST /api/usage error:", err.message);
+    res.status(204).send();
   }
 });
 app.get("/api/health", async (req, res) => {
