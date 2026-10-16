@@ -7,6 +7,7 @@
 -- ============================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS feature_usage;
 DROP TABLE IF EXISTS family_members;
 DROP TABLE IF EXISTS profiles;
 DROP TABLE IF EXISTS sharing_permissions;
@@ -21,7 +22,7 @@ DROP TABLE IF EXISTS mother_profiles;
 DROP TABLE IF EXISTS users;
 SET FOREIGN_KEY_CHECKS = 1;
 
--- FLOWER Maternal Health — 10-table DB schema (confirmed by user 2026-09-01)
+-- FLOWER Maternal Health — 13-table DB schema (confirmed by user 2026-09-01; +3 for family/profiles/usage)
 -- Split from old PassportProfile (30+ fields in one object)
 
 CREATE TABLE users (
@@ -169,4 +170,22 @@ CREATE TABLE family_members (
     relation VARCHAR(50),
     can_edit BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE feature_usage (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NULL,
+    role ENUM('mother','doctor','hospital_admin','family') NULL,
+    session_id CHAR(32) NULL,
+    feature_key VARCHAR(64) NOT NULL,
+    action VARCHAR(32) NOT NULL,
+    source ENUM('client','server') NOT NULL,
+    lang ENUM('en','kh') NULL,
+    metadata JSON NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_user_created (user_id, created_at),
+    INDEX idx_feature_action (feature_key, action, created_at),
+    INDEX idx_session (session_id),
+    INDEX idx_created (created_at)
 );

@@ -1,7 +1,7 @@
 -- FLOWERS schema (SAFE: re-runnable, never drops data). Database-agnostic: uses the connection's database.
 -- NOTE: the 'doctor OR hospital must be set' rule for sharing_permissions is enforced in server.ts, not in SQL
 --       (MySQL forbids a CHECK on columns used by ON DELETE SET NULL foreign keys).
--- FLOWER Maternal Health — 10-table DB schema (confirmed by user 2026-09-01)
+-- FLOWER Maternal Health — 13-table DB schema (confirmed by user 2026-09-01; +3 for family/profiles/usage)
 -- Split from old PassportProfile (30+ fields in one object)
 
 CREATE TABLE IF NOT EXISTS users (
@@ -149,4 +149,22 @@ CREATE TABLE IF NOT EXISTS family_members (
     relation VARCHAR(50),
     can_edit BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (mother_profile_id) REFERENCES mother_profiles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS feature_usage (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NULL,
+    role ENUM('mother','doctor','hospital_admin','family') NULL,
+    session_id CHAR(32) NULL,
+    feature_key VARCHAR(64) NOT NULL,
+    action VARCHAR(32) NOT NULL,
+    source ENUM('client','server') NOT NULL,
+    lang ENUM('en','kh') NULL,
+    metadata JSON NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_user_created (user_id, created_at),
+    INDEX idx_feature_action (feature_key, action, created_at),
+    INDEX idx_session (session_id),
+    INDEX idx_created (created_at)
 );
