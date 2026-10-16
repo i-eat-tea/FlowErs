@@ -710,6 +710,10 @@ app.post("/api/records", async (req, res) => {
       ]
     );
     res.status(201).json({ success: true, id, motherProfileId });
+    try {
+      if (userId && await hasConsent(userId)) await logServerEvent({ userId, role: "mother", req, feature: "record_add", action: "create", metadata: { category: category || void 0 } });
+    } catch {
+    }
   } catch (err) {
     console.error("POST /api/records error:", err.message);
     res.status(500).json({ error: "Database error" });
@@ -976,6 +980,15 @@ app.post("/api/appointments", async (req, res) => {
       ]
     );
     res.status(201).json({ success: true, id: apptId, motherProfileId });
+    try {
+      if (userId && await hasConsent(userId)) {
+        await logServerEvent({ userId, role: "mother", req, feature: "appointment_add", action: "create", metadata: { type: type || "Other" } });
+        if (reminder && reminder !== "none") {
+          await logServerEvent({ userId, role: "mother", req, feature: "reminder_set", action: "create", metadata: { type: type || "Other", reminder: reminder || "none" } });
+        }
+      }
+    } catch {
+    }
   } catch (err) {
     console.error("POST /api/appointments error:", err.message);
     res.status(500).json({ error: "Database error", details: err.message });
@@ -1392,6 +1405,7 @@ app.get("/api/folder/:id", async (req, res) => {
     res.status(500).json({ error: "Database error" });
   }
 });
+var CONSENT_VERSION = "2026-10-v1";
 var VALID_FEATURES = /* @__PURE__ */ new Set([
   "signup",
   "login",
@@ -1405,6 +1419,8 @@ var VALID_FEATURES = /* @__PURE__ */ new Set([
   "record_scan",
   "record_add",
   "appointment_add",
+  "reminder_set",
+  "daily_note",
   "info_link",
   "emergency_modal",
   "emergency_qr",
@@ -1434,6 +1450,7 @@ var METADATA_WHITELIST = /* @__PURE__ */ new Set([
   "category",
   "type",
   "target",
+  "reminder",
   "tier",
   "lang",
   "variant"
@@ -1452,6 +1469,30 @@ function checkRateLimit(sessionId, ip) {
   if (entry.count >= RATE_LIMIT_MAX_EVENTS) return false;
   entry.count++;
   return true;
+}
+var consentCache = /* @__PURE__ */ new Map();
+var CONSENT_CACHE_TTL = 10 * 60 * 1e3;
+async function hasConsent(userId) {
+  const now = Date.now();
+  const cached = consentCache.get(userId);
+  if (cached && now - cached.ts < CONSENT_CACHE_TTL) return cached.accepted;
+  const [rows] = await pool.execute("SELECT 1 FROM user_consents WHERE user_id = ? AND consent_version = ? LIMIT 1", [userId, CONSENT_VERSION]);
+  const accepted = rows.length > 0;
+  consentCache.set(userId, { accepted, ts: now });
+  return accepted;
+}
+function getLang(req) {
+  const h = req.headers["x-app-lang"] || req.headers["X-App-Lang"];
+  return h === "en" || h === "kh" ? h : null;
+}
+async function logServerEvent({ userId, role, req, feature, action, metadata }) {
+  try {
+    if (!await hasConsent(userId)) return;
+    const lang = getLang(req);
+    const sessionId = req.cookies?.flowers_sid || null;
+    await writeUsageEvent({ userId, role, sessionId, featureKey: feature, action, source: "server", lang: lang || void 0, metadata });
+  } catch {
+  }
 }
 async function writeUsageEvent(params) {
   try {
@@ -1528,6 +1569,9 @@ app.post("/api/usage", optionalAuth, async (req, res) => {
     if (consent !== "accepted") {
       return res.status(204).send();
     }
+    if (req.user?.id && !await hasConsent(req.user.id)) {
+      return res.status(204).send();
+    }
     const { events } = req.body;
     if (!Array.isArray(events) || events.length === 0 || events.length > 20) {
       return res.status(400).json({ error: "Invalid events array" });
@@ -1539,6 +1583,10 @@ app.post("/api/usage", optionalAuth, async (req, res) => {
     }
     const userId = req.user?.id || null;
     const role = req.user?.role || null;
+    if (userId && !await hasConsent(userId)) {
+      return res.status(204).send();
+    }
+    const lang = getLang(req);
     for (const event of events) {
       const { feature, action, metadata } = event;
       if (!VALID_FEATURES.has(feature)) continue;
@@ -1550,6 +1598,7 @@ app.post("/api/usage", optionalAuth, async (req, res) => {
         featureKey: feature,
         action,
         source: "client",
+        lang: lang || void 0,
         metadata
       }).catch(() => {
       });
@@ -1560,12 +1609,58 @@ app.post("/api/usage", optionalAuth, async (req, res) => {
     res.status(204).send();
   }
 });
+app.post("/api/daily-notes", async (req, res) => {
+  try {
+    const { userId, note_date, task, note } = req.body;
+    if (!userId || !note_date) return res.status(400).json({ error: "userId and note_date required" });
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(note_date);
+    if (!validDate) return res.status(400).json({ error: "Invalid note_date" });
+    if ((!task || !task.trim()) && (!note || !note.trim())) return res.status(400).json({ error: "task or note required" });
+    if (note && note.length > 2e3) return res.status(400).json({ error: "note too long" });
+    if (task && task.length > 255) return res.status(400).json({ error: "task too long" });
+    const id = generateId("note");
+    await pool.execute("INSERT INTO daily_notes (id, user_id, note_date, task, note) VALUES (?, ?, ?, ?, ?)", [id, userId, note_date, task?.trim() || null, note?.trim() || null]);
+    res.status(201).json({ success: true, id });
+    try {
+      if (userId && await hasConsent(userId)) await logServerEvent({ userId, role: "mother", req, feature: "daily_note", action: "create" });
+    } catch {
+    }
+  } catch (err) {
+    console.error("POST /api/daily-notes", err.message);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+app.get("/api/daily-notes/:userId", async (req, res) => {
+  try {
+    const [rows] = await pool.execute("SELECT * FROM daily_notes WHERE user_id = ? ORDER BY note_date DESC, created_at DESC", [req.params.userId]);
+    res.json(rows.map((r) => ({ id: r.id, userId: r.user_id, noteDate: r.note_date, task: r.task, note: r.note, createdAt: r.created_at, updatedAt: r.updated_at })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.delete("/api/daily-notes/:id", async (req, res) => {
+  try {
+    await pool.execute("DELETE FROM daily_notes WHERE id = ?", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.get("/api/health", async (req, res) => {
   try {
     await pool.execute("SELECT 1");
-    res.json({ status: "ok", database: "connected", time: (/* @__PURE__ */ new Date()).toISOString() });
+    const missingTables = [];
+    const required = ["feature_usage", "user_consents", "daily_notes"];
+    for (const t of required) {
+      try {
+        await pool.execute(`SELECT 1 FROM ${t} LIMIT 1`);
+      } catch {
+        missingTables.push(t);
+      }
+    }
+    res.json({ status: "ok", database: "connected", missingTables: missingTables.length ? missingTables : [], time: (/* @__PURE__ */ new Date()).toISOString() });
   } catch {
-    res.status(503).json({ status: "error", database: "disconnected", time: (/* @__PURE__ */ new Date()).toISOString() });
+    res.status(503).json({ status: "error", database: "disconnected", missingTables: ["unknown"], time: (/* @__PURE__ */ new Date()).toISOString() });
   }
 });
 async function startServer() {

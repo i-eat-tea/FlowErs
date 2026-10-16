@@ -18,7 +18,7 @@ export type Feature =
   | 'upgrade_modal'
   | 'walkthrough'
   | 'doctor_dashboard' | 'patient_detail'
-  | 'doctor_note';
+  | 'doctor_note' | 'reminder_set' | 'daily_note';
 
 export type Action =
   | 'view' | 'open' | 'click' | 'create' | 'start' | 'step' | 'complete' | 'skip' | 'replay';
@@ -54,7 +54,7 @@ export async function trackFeature(feature: Feature, action: Action, metadata?: 
 
     // Collect JWT if present
     const token = localStorage.getItem('flowers_auth_token');
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-App-Lang': (window as any).__usageLang || 'en' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     await fetch('/api/usage', {
@@ -69,3 +69,5 @@ export async function trackFeature(feature: Feature, action: Action, metadata?: 
     // swallow errors
   }
 }
+
+export function setUsageLang(lang: 'en'|'kh') { (window as any).__usageLang = lang; }
