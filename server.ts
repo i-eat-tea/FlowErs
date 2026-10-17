@@ -1738,8 +1738,11 @@ app.post('/api/consent', async (req, res) => {
 
   res.cookie('flowers_consent', choice, cookieOpts);
 
-  // DB insert for consent visibility
-  const userId = req.user?.id || null;
+  // DB insert for consent visibility (works with or without full auth session)
+  const cookieUserId = req.cookies.flowers_sid ? null : null; // sid is session, not user
+  const bodyUserId = (req.body && req.body.userId) || (req.body && req.body.user_id) || null;
+  const authUserId = req.user?.id || null;
+  const userId = authUserId || bodyUserId || null;
   if (userId && choice === 'accepted') {
     try {
       await pool.execute(
@@ -1787,7 +1790,7 @@ app.get('/api/usage', optionalAuth, async (req: AuthRequest, res) => {
 // GET /api/user-consents/:id
 app.get('/api/user-consents/:id', optionalAuth, async (req: AuthRequest, res) => {
   try {
-    const userId = req.params.id || req.user?.id || null;
+    const userId = req.params.id || req.body?.userId || req.user?.id || null;
     if (!userId) return res.status(400).json({ error: 'id required' });
     const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM user_consents WHERE user_id = ?', [userId]);
     res.json(rows);
