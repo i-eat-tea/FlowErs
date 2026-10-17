@@ -78,6 +78,9 @@ function toKhmerNumber(num: number | string): string {
 }
 
 export default function AppointmentsView({
+  dailyNotes,
+  onAddDailyNote,
+  onDeleteDailyNote,
   appointments,
   onAddAppointment,
   onUpdateAppointment,
@@ -779,10 +782,17 @@ export default function AppointmentsView({
             <button
               onClick={() => {
                 const current = dailyReminders[selectedDateStr] || {};
-                const updated = { ...dailyReminders, [selectedDateStr]: { ...current, reminderText: (current.task || '') + ' ' + (current.note || '') } };
+                const taskText = current.task || '';
+                const noteText = current.note || '';
+                // Persist to DB via prop
+                if (onAddDailyNote && (taskText.trim() || noteText.trim())) {
+                  onAddDailyNote(taskText.trim(), noteText.trim(), selectedDateStr);
+                }
+                // Keep local state sync
+                const updated = { ...dailyReminders, [selectedDateStr]: { ...current, reminderText: taskText + ' ' + noteText } };
                 setDailyReminders(updated);
                 localStorage.setItem('flowers_daily_reminders', JSON.stringify(updated));
-                setDailyReminders({ ...updated, [selectedDateStr]: { task: '', note: '', reminderText: (current.task || '') + ' ' + (current.note || '') } });
+                setDailyReminders({ ...updated, [selectedDateStr]: { task: taskText, note: noteText, reminderText: taskText + ' ' + noteText } });
               }}
               className="text-[9px] font-black text-[#FA6B90] hover:underline">Save</button>
           </div>

@@ -1708,12 +1708,16 @@ async function writeUsageEvent(params: {
 }
 
 // GET /api/consent
-app.get('/api/consent', (req, res) => {
-  const consent = req.cookies.flowers_consent;
-  if (consent === 'accepted' || consent === 'declined') {
-    return res.json({ consent });
+app.get('/api/consent', async (req, res) => {
+  const userId = req.user?.id || null;
+  let dbConsent: boolean | null = null;
+  if (userId) {
+    try { dbConsent = await hasConsent(userId); } catch {}
   }
-  res.json({ consent: null });
+  const cookie = req.cookies.flowers_consent;
+  if (dbConsent === true) return res.json({ consent: 'accepted', source: 'db' });
+  if (cookie === 'accepted' || cookie === 'declined') return res.json({ consent: cookie, source: 'cookie' });
+  res.json({ consent: dbConsent ? 'accepted' : null, source: dbConsent ? 'db' : null });
 });
 
 // POST /api/consent
@@ -1733,6 +1737,19 @@ app.post('/api/consent', async (req, res) => {
   if (isProd) cookieOpts.secure = true;
 
   res.cookie('flowers_consent', choice, cookieOpts);
+
+  // DB insert for consent visibility
+  const userId = req.user?.id || null;
+  if (userId && choice === 'accepted') {
+    try {
+      await pool.execute(
+        `INSERT INTO user_consents (user_id, consent_version, lang, accepted_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+         ON DUPLICATE KEY UPDATE consent_version = VALUES(consent_version), accepted_at = CURRENT_TIMESTAMP`,
+        [userId, CONSENT_VERSION, req.body.lang || 'en']
+      );
+    } catch (e: any) { console.error('[consent DB insert]', e.message); }
+  }
 
   if (choice === 'accepted') {
     // Generate session ID if not present
@@ -1754,6 +1771,27 @@ app.post('/api/consent', async (req, res) => {
   }
 
   res.json({ consent: choice });
+});
+
+// GET /api/usage
+app.get('/api/usage', optionalAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id || null;
+    if (!userId) return res.status(401).json({ error: 'auth required' });
+    if (!(await hasConsent(userId))) return res.status(204).send();
+    const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM feature_usage WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', [userId]);
+    res.json(rows);
+  } catch (err: any) { console.error('GET /api/usage error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/user-consents/:id
+app.get('/api/user-consents/:id', optionalAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.params.id || req.user?.id || null;
+    if (!userId) return res.status(400).json({ error: 'id required' });
+    const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM user_consents WHERE user_id = ?', [userId]);
+    res.json(rows);
+  } catch (err: any) { console.error('GET /api/user-consents error:', err.message); res.status(500).json({ error: err.message }); }
 });
 
 // POST /api/usage
