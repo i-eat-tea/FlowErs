@@ -31,6 +31,8 @@ import LoginView from './components/LoginView';
 import PregnancySetupWizard from './components/PregnancySetupWizard';
 import InfoAccessView from './components/InfoAccessView';
 import UpgradeModal from './components/UpgradeModal';
+import ConsentGate from './components/ConsentGate';
+import FeatureWalkthrough from './components/FeatureWalkthrough';
 
 // Components — Doctor
 import DoctorLoginView from './components/DoctorLoginView';
@@ -48,7 +50,7 @@ async function apiGet<T>(path: string): Promise<T | null> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30000); // allows a Render cold start
   try {
-    const res = await fetch(path, { signal: ctrl.signal });
+    const res = await fetch(path, { signal: ctrl.signal, headers: { 'X-App-Lang': document.documentElement.lang === 'km' ? 'kh' : 'en' } });
     if (!res.ok) { console.error(`[API ERROR] GET ${path} status=${res.status}`); return null; }
     return (await res.json()) as T;
   } catch (e) { console.error(`[API ERROR] GET ${path}`, e); return null; }
@@ -59,7 +61,7 @@ async function apiPost<T = any>(path: string, body: unknown): Promise<T | null> 
   try {
     const res = await fetch(path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-App-Lang': document.documentElement.lang === 'km' ? 'kh' : 'en' },
       body: JSON.stringify(body),
     });
     if (!res.ok) return null;
@@ -78,7 +80,7 @@ async function apiPut<T = any>(path: string, body: unknown): Promise<T | null> {
   try {
     const res = await fetch(path, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-App-Lang': document.documentElement.lang === 'km' ? 'kh' : 'en' },
       body: JSON.stringify(body),
     });
     if (!res.ok) return null;
@@ -95,7 +97,7 @@ async function apiPut<T = any>(path: string, body: unknown): Promise<T | null> {
 
 async function apiDelete(path: string): Promise<boolean> {
   try {
-    const res = await fetch(path, { method: 'DELETE' });
+    const res = await fetch(path, { method: 'DELETE', headers: { 'X-App-Lang': document.documentElement.lang === 'km' ? 'kh' : 'en' } });
     return res.ok;
   } catch (e) {
     console.error(`[API ERROR] DELETE ${path}`, e);
@@ -155,6 +157,15 @@ export default function App() {
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [showJourneyReport, setShowJourneyReport] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+
+  // Consent Gate state (shown after sign-in / on session restore when server says consent required)
+  const [consentGateOpen, setConsentGateOpen] = useState(false);
+
+  // Walkthrough state
+  const [walkthroughOpen, setWalkthroughOpen] = useState(false);
+
+  // Daily notes state
+  const [dailyNotes, setDailyNotes] = useState<{ id: string; user_id: string; note_date: string; task?: string | null; note?: string | null; created_at?: string }[]>([]);
 
   // Data States — initialized from localStorage fallback, then synced from MySQL
   const [profile, setProfile] = useState<PassportProfile>(() => {
@@ -252,9 +263,10 @@ export default function App() {
         dbProfile = await apiGet<PassportProfile>(`/api/profile/${userId}`);
       }
 
-      const [dbRecords, dbAppointments] = await Promise.all([
+      const [dbRecords, dbAppointments, dbDailyNotes] = await Promise.all([
         apiGet<MedicalRecord[]>(`/api/records/${userId}`),
         apiGet<Appointment[]>(`/api/appointments/${userId}`),
+        apiGet<{ id: string; user_id: string; note_date: string; task?: string | null; note?: string | null }[]>(`/api/daily-notes/${userId}`),
       ]);
 
       const pp = motherProfileData?.pregnancyProfile;
@@ -280,6 +292,9 @@ export default function App() {
       if (dbAppointments !== null) {
         setAppointments(dbAppointments);
         localStorage.setItem('flowers_maternal_appointments', JSON.stringify(dbAppointments));
+      }
+      if (dbDailyNotes !== null) {
+        setDailyNotes(dbDailyNotes);
       }
       setDataLoaded(true);
       } catch (e) {
@@ -332,6 +347,30 @@ export default function App() {
     if (!dataLoaded || !isLoggedIn) return;
     localStorage.setItem('flowers_maternal_appointments', JSON.stringify(appointments));
   }, [appointments, dataLoaded, isLoggedIn]);
+
+  // One-time import of legacy daily reminder localStorage into daily_notes
+  useEffect(() => {
+    if (!isLoggedIn || !userId) return;
+    const legacy = localStorage.getItem('flowers_daily_reminders');
+    if (!legacy) return;
+    try {
+      const parsed = JSON.parse(legacy);
+      const entries = Array.isArray(parsed) ? parsed : (parsed && parsed.entries ? parsed.entries : []);
+      entries.forEach((entry: any) => {
+        if (entry.date && (entry.task || entry.note)) {
+          apiPost('/api/daily-notes', {
+            userId,
+            note_date: entry.date,
+            task: entry.task || null,
+            note: entry.note || null,
+          }).catch(() => {});
+        }
+      });
+    } catch (e) { console.error('daily reminder import failed', e); }
+    finally {
+      localStorage.removeItem('flowers_daily_reminders');
+    }
+  }, [isLoggedIn, userId]);
 
   // Sync document language
   useEffect(() => {
@@ -429,6 +468,37 @@ export default function App() {
     setActiveTab('records');
   };
 
+  // ── Daily note handlers ──
+  const handleAddDailyNote = useCallback(async (task: string, note: string, noteDate: string) => {
+    if (!task && !note) return;
+    const optimistic: { id: string; user_id: string; note_date: string; task?: string | null; note?: string | null } = {
+      id: `note-${Date.now()}`,
+      user_id: userId,
+      note_date: noteDate,
+      task: task || null,
+      note: note || null,
+    };
+    setDailyNotes(prev => [...prev, optimistic]);
+    await apiPost('/api/daily-notes', {
+      userId,
+      note_date: noteDate,
+      task: task || null,
+      note: note || null,
+    }).catch(() => {
+      setDailyNotes(prev => prev.filter(n => n.id !== optimistic.id));
+    });
+  }, [userId]);
+
+  const handleDeleteDailyNote = useCallback(async (id: string) => {
+    setDailyNotes(prev => prev.filter(n => n.id !== id));
+    await apiDelete(`/api/daily-notes/${id}`).catch(() => {
+      // reload on failure
+      apiGet(`/api/daily-notes/${userId}`).then(notes => {
+        if (notes) setDailyNotes(notes);
+      });
+    });
+  }, [userId]);
+
   // ─── Auth Handlers ─────────────────────────────────────────────────────────
 
   const handleLoginSuccess = (motherName: string, serverUserId: string) => {
@@ -455,6 +525,9 @@ export default function App() {
     apiPut(`/api/mother-profile/${serverUserId}`, {
       fullName: motherName,
     }).catch(() => {});
+
+    // Open consent gate after sign-in (server says consent required for existing/new users)
+    setConsentGateOpen(true);
   };
 
   const handleDoctorLoginSuccess = (email: string, role: 'doctor' | 'hospital_admin') => {
@@ -471,6 +544,8 @@ export default function App() {
     localStorage.setItem('flowers_user_role', role);
     localStorage.setItem('flowers_doctor_email', email);
     localStorage.setItem('flowers_doctor_name', name);
+
+    setConsentGateOpen(true);
   };
 
   const handleSelectPatient = useCallback(async (motherProfileId: string) => {
@@ -522,6 +597,8 @@ export default function App() {
     setSelectedPatientAppointments([]);
     setIsDoctorDataLoaded(false);
     setDataLoaded(false); // Reset data loaded state on logout
+    setConsentGateOpen(false);
+    setWalkthroughOpen(false);
     localStorage.removeItem('flowers_is_logged_in');
     localStorage.removeItem('flowers_user_id'); // CRITICAL: Clear stored userId on logout
     localStorage.removeItem('flowers_user_role');
@@ -622,6 +699,22 @@ export default function App() {
     );
   }
 
+  // 1b. CONSENT GATE — shown after sign-in / on session restore before app UI
+  if (consentGateOpen) {
+    return (
+      <ConsentGate
+        lang={lang}
+        onAgree={() => {
+          setConsentGateOpen(false);
+          setWalkthroughOpen(true);
+        }}
+        onDecline={() => {
+          setConsentGateOpen(false);
+        }}
+      />
+    );
+  }
+
   // 2. DOCTOR / HOSPITAL ADMIN VIEW
   if (userRole === 'doctor' || userRole === 'hospital_admin') {
     if (!isDoctorDataLoaded) {
@@ -663,6 +756,7 @@ export default function App() {
             patients={doctorPatients}
             onSelectPatient={handleSelectPatient}
             lang={lang}
+            onReplayWalkthrough={() => setWalkthroughOpen(true)}
           />
         </div>
       );
@@ -832,6 +926,9 @@ export default function App() {
             lang={lang}
             profile={profile}
             currentWeek={pregnancyMetrics.weeks}
+            dailyNotes={dailyNotes}
+            onAddDailyNote={handleAddDailyNote}
+            onDeleteDailyNote={handleDeleteDailyNote}
           />
         )}
 
@@ -986,6 +1083,19 @@ export default function App() {
         lang={lang}
         feature={lang === 'en' ? 'Premium Features' : '功能'}
       />
+
+      {/* 8. MODAL: FEATURE WALKTHROUGH */}
+      {walkthroughOpen && (
+        <FeatureWalkthrough
+          lang={lang}
+          variant="mother"
+          userId={userId}
+          onNavigate={(tab) => { setActiveTab(tab as any); setWalkthroughOpen(false); }}
+          onComplete={() => setWalkthroughOpen(false)}
+          onSkip={() => setWalkthroughOpen(false)}
+        />
+      )
+      }
     </div>
   );
 }

@@ -37,6 +37,7 @@ interface DoctorDashboardProps {
   patients: PatientSummary[];
   onSelectPatient: (motherProfileId: string) => void;
   lang: 'en' | 'kh';
+  onReplayWalkthrough?: () => void;
 }
 
 export default function DoctorDashboard({

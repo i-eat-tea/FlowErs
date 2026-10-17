@@ -10,10 +10,13 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, ChevronRight, ChevronLeft, X, CheckCircle2 } from 'lucide-react';
 import { trackFeature } from '../lib/usage';
 
-const WALKTHROUGH_KEY = 'flowers_walkthrough_seen';
+const WALKTHROUGH_KEY = 'walkthrough_seen';
 
 interface FeatureWalkthroughProps {
   lang: 'en' | 'kh';
+  variant?: 'mother' | 'doctor';
+  userId?: string;
+  onNavigate?: (tab: string) => void;
   onComplete?: () => void;
   onSkip?: () => void;
 }

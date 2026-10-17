@@ -13,6 +13,9 @@ import { Appointment } from '../types';
 import { TRANSLATIONS } from '../data';
 
 interface AppointmentsViewProps {
+  dailyNotes?: { id: string; user_id: string; note_date: string; task?: string | null; note?: string | null; created_at?: string }[];
+  onAddDailyNote?: (task: string, note: string, noteDate: string) => void;
+  onDeleteDailyNote?: (id: string) => void;
   appointments: Appointment[];
   onAddAppointment: (appt: Appointment) => void;
   onUpdateAppointment?: (appt: Appointment) => void;
