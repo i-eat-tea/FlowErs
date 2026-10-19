@@ -396,6 +396,43 @@ export default function App() {
     if (feature) trackFeature(feature, 'view', { tab: activeTab });
   }, [activeTab, isLoggedIn, userRole]);
 
+  // Session restore: if a stored token exists, check consent status
+  useEffect(() => {
+    const token = localStorage.getItem('flowers_auth_token');
+    if (token && isLoggedIn && !consentGateOpen) {
+      (async () => {
+        try {
+          const res = await fetch('/api/consent/status', {
+            headers: { 'Authorization': 'Bearer ' + token, 'X-App-Lang': lang === 'kh' ? 'kh' : 'en' }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.required === true) setConsentGateOpen(true);
+          }
+        } catch {}
+      })();
+    }
+  }, [isLoggedIn, lang, consentGateOpen]);
+
+  // Set usage language when language changes
+  useEffect(() => {
+    setUsageLang(lang);
+  }, [lang]);
+
+  // Auto-start feature walkthrough once per user (after consent gate closed and setup done)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    if (consentGateOpen) return;
+    const id = userRole === 'doctor' || userRole === 'hospital_admin' ? doctorEmail : userId;
+    if (!id) return;
+    const seenKey = 'walkthrough_seen:' + id;
+    const hasCompleted = (userRole === 'mother' && hasCompletedSetup) || (userRole === 'doctor' || userRole === 'hospital_admin');
+    if (hasCompleted && !localStorage.getItem(seenKey)) {
+      setWalkthroughOpen(true);
+      trackFeature('walkthrough', 'start', { step: 1, total_steps: userRole === 'mother' ? 9 : 4, variant: userRole === 'mother' ? 'mother' : 'doctor', lang });
+    }
+  }, [isLoggedIn, consentGateOpen, userId, doctorEmail, userRole, hasCompletedSetup, lang]);
+
   // ========================================================
   // PREGNANCY METRICS CALCULATOR
   // ========================================================
@@ -705,29 +742,6 @@ export default function App() {
     );
   }
 
-  // Session restore: if a stored token exists, check consent status
-  useEffect(() => {
-    const token = localStorage.getItem('flowers_auth_token');
-    if (token && isLoggedIn && !consentGateOpen) {
-      (async () => {
-        try {
-          const res = await fetch('/api/consent/status', {
-            headers: { 'Authorization': `Bearer ${token}`, 'X-App-Lang': lang === 'kh' ? 'kh' : 'en' }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.required === true) setConsentGateOpen(true);
-          }
-        } catch {}
-      })();
-    }
-  }, [isLoggedIn, lang]);
-
-  // Set usage language when language changes
-  useEffect(() => {
-    setUsageLang(lang);
-  }, [lang]);
-
   // 1b. CONSENT GATE — shown after sign-in / on session restore before app UI
   if (consentGateOpen) {
     return (
@@ -735,7 +749,6 @@ export default function App() {
         lang={lang}
         onAgree={() => {
           setConsentGateOpen(false);
-          setWalkthroughOpen(true);
         }}
         onDecline={() => {
           setConsentGateOpen(false);
@@ -1110,7 +1123,7 @@ export default function App() {
           setShowUpgradeModal(false);
         }}
         lang={lang}
-        feature={lang === 'en' ? 'Premium Features' : '功能'}
+        feature={lang === 'en' ? 'Premium Features' : 'លក្ខ�ន�ព special'}
       />
 
       {/* 8. MODAL: FEATURE WALKTHROUGH */}
@@ -1119,7 +1132,7 @@ export default function App() {
           lang={lang}
           variant="mother"
           userId={userId}
-          onNavigate={(tab) => { setActiveTab(tab as any); setWalkthroughOpen(false); }}
+          onNavigate={(tab) => { setActiveTab(tab as any); }}
           onComplete={() => setWalkthroughOpen(false)}
           onSkip={() => setWalkthroughOpen(false)}
         />

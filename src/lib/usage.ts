@@ -21,7 +21,7 @@ export type Feature =
   | 'doctor_note' | 'reminder_set' | 'daily_note';
 
 export type Action =
-  | 'view' | 'open' | 'click' | 'create' | 'start' | 'step' | 'complete' | 'skip' | 'replay';
+  | 'view' | 'open' | 'click' | 'copy' | 'create' | 'start' | 'step' | 'complete' | 'skip' | 'replay';
 
 export interface UsageEvent {
   feature: Feature;
@@ -33,8 +33,14 @@ export interface UsageEvent {
 const lastEventKey = new Map<string, number>();
 const DEBOUNCE_MS = 2000;
 
-function debounceEvent(feature: Feature, action: Action): boolean {
-  const key = `${feature}:${action}`;
+function debounceEvent(feature: Feature, action: Action, metadata?: Record<string, string | number>): boolean {
+  let key = `${feature}:${action}`;
+  if (metadata) {
+    const target = metadata.target;
+    const tab = metadata.tab;
+    if (target) key += `:${target}`;
+    if (tab) key += `:${tab}`;
+  }
   const now = Date.now();
   const last = lastEventKey.get(key) || 0;
   if (now - last < DEBOUNCE_MS) return true; // skip
@@ -50,18 +56,39 @@ export async function trackFeature(feature: Feature, action: Action, metadata?: 
     if (!token) return;
 
     // Skip if debounced
-    if (debounceEvent(feature, action)) return;
+    if (debounceEvent(feature, action, metadata)) return;
 
     // JWT was already verified above; build headers
     const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-App-Lang': (window as any).__usageLang || 'en' };
     headers['Authorization'] = `Bearer ${token}`;
 
+    // Vocabulary-only metadata (drop unknown keys / bad values)
+    const allowed = {
+      target: ['telegram_bot', 'data_center'],
+      tab: ['home', 'records', 'calendar', 'info', 'passport'],
+      category: ['ultrasound', 'lab_test', 'prescription', 'vaccine', 'doctor_note'],
+      type: ['ANC', 'Ultrasound', 'Blood Test', 'Vaccine', 'Specialist', 'Other'],
+      reminder: ['1_week', '3_days', '1_day', 'same_day', 'custom', 'none'],
+      tier: ['free', 'premium'],
+      variant: ['mother', 'doctor'],
+      lang: ['en', 'kh'],
+    };
+    const cleanMeta: Record<string, string | number> = {};
+    if (metadata) {
+      for (const [k, v] of Object.entries(metadata)) {
+        if (k === 'step' || k === 'total_steps') {
+          if (typeof v === 'number' && v >= 1 && v <= 20) cleanMeta[k] = v;
+        } else if (allowed[k as keyof typeof allowed]) {
+          if (allowed[k as keyof typeof allowed].includes(String(v))) cleanMeta[k] = v;
+        }
+      }
+    }
     await fetch('/api/usage', {
       method: 'POST',
       keepalive: true,
       headers,
       body: JSON.stringify({
-        events: [{ feature, action, metadata }]
+        events: [{ feature, action, metadata: Object.keys(cleanMeta).length ? cleanMeta : undefined }]
       })
     });
   } catch {

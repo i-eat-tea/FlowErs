@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import { Info, Send, Globe, ExternalLink, Copy, Check } from 'lucide-react';
+import { trackFeature } from '../lib/usage';
 import { QRCodeCanvas } from 'qrcode.react';
 
 const TELEGRAM_BOT_URL = 'https://t.me/FlowErs168bot';
@@ -69,11 +70,12 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-function LinkActions({ url, lang }: { url: string; lang: 'en' | 'kh' }) {
+function LinkActions({ url, lang, target }: { url: string; lang: 'en' | 'kh'; target: 'telegram_bot' | 'data_center' }) {
   const c = COPY[lang];
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
+    trackFeature('info_link', 'copy', { target });
     if (await copyText(url)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
@@ -86,6 +88,7 @@ function LinkActions({ url, lang }: { url: string; lang: 'en' | 'kh' }) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={() => trackFeature('info_link', 'open', { target })}
         className="flex-1 py-2.5 bg-[#FA6B90] hover:bg-[#f05e84] text-white rounded-xl text-xs font-black uppercase tracking-wide cursor-pointer transition-all shadow-3xs flex items-center justify-center space-x-1.5"
       >
         <ExternalLink className="w-3.5 h-3.5" />
@@ -157,7 +160,7 @@ export default function InfoAccessView({ lang }: InfoAccessViewProps) {
           <p className="text-[10px] text-[#CFADB9] font-medium text-center">{c.scan}</p>
         </div>
 
-        <LinkActions url={TELEGRAM_BOT_URL} lang={lang} />
+        <LinkActions url={TELEGRAM_BOT_URL} lang={lang} target='telegram_bot' />
       </div>
 
       {/* Information portal */}
@@ -176,7 +179,7 @@ export default function InfoAccessView({ lang }: InfoAccessViewProps) {
           {INFO_PORTAL_URL}
         </p>
 
-        <LinkActions url={INFO_PORTAL_URL} lang={lang} />
+        <LinkActions url={INFO_PORTAL_URL} lang={lang} target='data_center' />
       </div>
     </div>
   );

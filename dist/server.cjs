@@ -1475,6 +1475,7 @@ var VALID_ACTIONS = /* @__PURE__ */ new Set([
   "view",
   "open",
   "click",
+  "copy",
   "create",
   "start",
   "step",
@@ -1540,15 +1541,25 @@ async function logServerEvent({ userId, role: role2, req, feature, action, metad
 async function writeUsageEvent(params) {
   try {
     const { userId, role: role2, sessionId: sessionId2, featureKey, action, source, lang, metadata } = params;
+    const allowed = {
+      target: ["telegram_bot", "data_center"],
+      tab: ["home", "records", "calendar", "info", "passport"],
+      category: ["ultrasound", "lab_test", "prescription", "vaccine", "doctor_note"],
+      type: ["ANC", "Ultrasound", "Blood Test", "Vaccine", "Specialist", "Other"],
+      reminder: ["1_week", "3_days", "1_day", "same_day", "custom", "none"],
+      tier: ["free", "premium"],
+      variant: ["mother", "doctor"],
+      lang: ["en", "kh"]
+    };
     const filteredMeta = {};
     if (metadata) {
       for (const key of Object.keys(metadata)) {
         if (METADATA_WHITELIST.has(key)) {
           const value = metadata[key];
-          if (typeof value === "string" && value.length <= 100) {
-            filteredMeta[key] = value;
-          } else if (typeof value === "number") {
-            filteredMeta[key] = value;
+          if (key === "step" || key === "total_steps") {
+            if (typeof value === "number" && value >= 1 && value <= 20) filteredMeta[key] = value;
+          } else if (allowed[key]) {
+            if (allowed[key].includes(String(value))) filteredMeta[key] = value;
           }
         }
       }
@@ -1710,7 +1721,7 @@ app.post("/api/daily-notes", async (req, res) => {
 });
 app.get("/api/daily-notes/:userId", async (req, res) => {
   try {
-    const [rows] = await pool.execute("SELECT * FROM daily_notes WHERE user_id = ? ORDER BY note_date DESC, created_at DESC", [req.params.userId]);
+    const [rows] = await pool.execute("SELECT id, user_id, DATE_FORMAT(note_date, '%Y-%m-%d') AS note_date, task, note, created_at, updated_at FROM daily_notes WHERE user_id = ? ORDER BY note_date DESC, created_at DESC", [req.params.userId]);
     res.json(rows.map((r) => ({ id: r.id, userId: r.user_id, noteDate: r.note_date, task: r.task, note: r.note, createdAt: r.created_at, updatedAt: r.updated_at })));
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -115,11 +115,9 @@ export default function AppointmentsView({
   const [formNotes, setNotes] = useState('');
   const [formReminder, setFormReminder] = useState<Appointment['reminder']>('1_day');
 
-  // Daily reminders (date -> {note, task, reminderText})
-  const [dailyReminders, setDailyReminders] = useState<Record<string, { note?: string; task?: string; reminderText?: string }>>(() => {
-    const saved = localStorage.getItem('flowers_daily_reminders');
-    return saved ? JSON.parse(saved) : {};
-  });
+  // Daily notes draft
+  const [draftTask, setDraftTask] = useState('');
+  const [draftNote, setDraftNote] = useState('');
 
   // Today Date string (dynamic)
   const todayStr = useMemo(() => formatDateToISO(new Date()), []);
@@ -560,7 +558,8 @@ export default function AppointmentsView({
                 const hasAppt = apptsOnDate.length > 0;
                 const hasUltrasound = apptsOnDate.some(a => a.type === 'Ultrasound');
                 const hasANC = apptsOnDate.some(a => a.type === 'ANC');
-                const hasReminder = !!(dailyReminders[cell.dateStr]?.note || dailyReminders[cell.dateStr]?.task);
+                const notesForDate = (dailyNotes || []).filter(n => String(n.note_date || n.noteDate || '').slice(0,10) === cell.dateStr);
+                const hasReminder = notesForDate.length > 0;
 
                 return (
                   <button
@@ -775,39 +774,43 @@ export default function AppointmentsView({
           </button>
         </div>
 
-        {/* Daily Reminder / Note */}
+        {/* Daily Notes Cards */}
+        <div className="space-y-2">
+          <h5 className="text-[10px] font-black uppercase text-[#2F6F8F]/70 tracking-wider">Daily Notes</h5>
+          {(dailyNotes || []).filter((n: any) => String((n.note_date || n.noteDate || '')).slice(0,10) === selectedDateStr).map((note: any) => (
+            <div key={note.id} className="bg-[#FEFAFB] border border-[#FDDEEC] rounded-xl p-3 space-y-1 shadow-3xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-0.5">
+                  {note.task && <div className="text-[10px] font-bold text-[#FA6B90]">📌 {note.task}</div>}
+                  {note.note && <div className="text-[11px] text-[#2F6F8F] leading-snug">📝 {note.note}</div>}
+                </div>
+                <button onClick={() => onDeleteDailyNote && onDeleteDailyNote(note.id)} className="text-[10px] font-bold text-red-500 hover:underline shrink-0" aria-label="Delete">✕</button>
+              </div>
+            </div>
+          ))}
+          {((dailyNotes || []).filter((n: any) => String((n.note_date || n.noteDate || '')).slice(0,10) === selectedDateStr).length === 0) && (
+            <p className="text-[11px] text-[#CFADB9]">No notes for this day.</p>
+          )}
+        </div>
+
+        {/* Daily Notes Form */}
         <div className="bg-[#FEFAFB] rounded-2xl border border-[#FDDEEC] p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <h5 className="text-[10px] font-black uppercase text-[#2F6F8F]/70 tracking-wider">Daily Note / Reminder</h5>
+            <h5 className="text-[10px] font-black uppercase text-[#2F6F8F]/70 tracking-wider">Add Note</h5>
             <button
               onClick={() => {
-                const current = dailyReminders[selectedDateStr] || {};
-                const taskText = current.task || '';
-                const noteText = current.note || '';
-                // Persist to DB via prop
-                if (onAddDailyNote && (taskText.trim() || noteText.trim())) {
-                  onAddDailyNote(taskText.trim(), noteText.trim(), selectedDateStr);
+                if (draftTask.trim() || draftNote.trim()) {
+                  if (onAddDailyNote) onAddDailyNote(draftTask.trim(), draftNote.trim(), selectedDateStr);
+                  setDraftTask('');
+                  setDraftNote('');
                 }
-                // Keep local state sync
-                const updated = { ...dailyReminders, [selectedDateStr]: { ...current, reminderText: taskText + ' ' + noteText } };
-                setDailyReminders(updated);
-                localStorage.setItem('flowers_daily_reminders', JSON.stringify(updated));
-                setDailyReminders({ ...updated, [selectedDateStr]: { task: taskText, note: noteText, reminderText: taskText + ' ' + noteText } });
               }}
-              className="text-[9px] font-black text-[#FA6B90] hover:underline">Save</button>
+              disabled={!draftTask.trim() && !draftNote.trim()}
+              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#FA6B90] to-[#F4A6B5] text-white text-xs font-black shadow-xs disabled:opacity-40 cursor-pointer transition-all"
+            >Add</button>
           </div>
-          <input type="text" placeholder="Task / reminder ..." value={dailyReminders[selectedDateStr]?.task || ''} onChange={e => setDailyReminders({ ...dailyReminders, [selectedDateStr]: { ...(dailyReminders[selectedDateStr] || {}), task: e.target.value } })} className="w-full p-2 rounded-lg border border-[#FDDEEC] text-[11px] bg-white" />
-          <textarea rows={2} placeholder="Note ..." value={dailyReminders[selectedDateStr]?.note || ''} onChange={e => setDailyReminders({ ...dailyReminders, [selectedDateStr]: { ...(dailyReminders[selectedDateStr] || {}), note: e.target.value } })} className="w-full p-2 rounded-lg border border-[#FDDEEC] text-[11px] bg-white resize-none" />
-          {(dailyReminders[selectedDateStr]?.note || dailyReminders[selectedDateStr]?.task) && (
-            <div className="bg-[#FDDEEC] border border-[#F5B1CE] rounded-xl p-2.5 space-y-1 shadow-3xs">
-              {dailyReminders[selectedDateStr]?.task && (
-                <div className="bg-white rounded-lg px-2 py-1.5 text-[10px] font-bold text-[#FA6B90] border border-[#F5B1CE]">📌 {dailyReminders[selectedDateStr].task}</div>
-              )}
-              {dailyReminders[selectedDateStr]?.note && (
-                <div className="bg-white rounded-lg px-2 py-1.5 text-[10px] text-[#2F6F8F] font-medium border border-[#FDDEEC]">📝 {dailyReminders[selectedDateStr].note}</div>
-              )}
-            </div>
-          )}
+          <input type="text" placeholder="Task / reminder ..." value={draftTask} onChange={e => setDraftTask(e.target.value)} className="w-full p-2 rounded-lg border border-[#FDDEEC] text-[11px] bg-white" />
+          <textarea rows={2} placeholder="Note ..." value={draftNote} onChange={e => setDraftNote(e.target.value)} className="w-full p-2 rounded-lg border border-[#FDDEEC] text-[11px] bg-white resize-none" />
         </div>
 
         {selectedDateAppointments.length === 0 ? (
