@@ -546,6 +546,7 @@ export default function App() {
   const handleLoginSuccess = (motherName: string, serverUserId: string, consentRequired?: boolean) => {
     // CRITICAL: Store the actual user ID from the server
     localStorage.setItem('flowers_user_id', serverUserId);
+    (window as any).__userId = serverUserId;
     setUserId(serverUserId); // Update state immediately
     setDataLoaded(false); // Reset data loaded to trigger fresh DB load
 

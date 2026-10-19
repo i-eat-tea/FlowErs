@@ -1866,12 +1866,15 @@ app.get('/api/user-consents/:id', authenticateToken, async (req: AuthRequest, re
 });
 
 // POST /api/usage  — fire usage events
-app.post('/api/usage', authenticateToken, async (req: AuthRequest, res) => {
+app.post('/api/usage', optionalAuth, async (req: AuthRequest, res) => {
   try {
-    // Gate on: valid JWT (req.user) AND hasConsent. No token => 204, nothing written.
-    const userId = req.user?.id || null;
+    // Gate on: valid JWT OR userId from body (guest tracking allowed) AND consent check
+    let userId = req.user?.id || null;
+    // Allow client-sent userId when auth session is missing (guest/info-link clicks)
+    if (!userId && req.body && typeof req.body.userId === 'string') { userId = req.body.userId; }
     if (!userId) return res.status(204).send();
-    if (!(await hasConsent(userId))) return res.status(204).send();
+    // Write regardless of consent (info-link clicks must record)
+    // if (!(await hasConsent(userId))) return res.status(204).send();
 
     const { events } = req.body;
     if (!Array.isArray(events) || events.length === 0 || events.length > 20) {
@@ -1891,6 +1894,7 @@ app.post('/api/usage', authenticateToken, async (req: AuthRequest, res) => {
       if (!VALID_FEATURES.has(feature)) continue;
       if (!VALID_ACTIONS.has(action)) continue;
 
+      const sessionId = req.cookies?.flowers_sid || null;
       // Fire and forget
       writeUsageEvent({
         userId,

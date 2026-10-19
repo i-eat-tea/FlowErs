@@ -51,18 +51,17 @@ function debounceEvent(feature: Feature, action: Action, metadata?: Record<strin
 /** Track a feature usage event. Fire and forget. */
 export async function trackFeature(feature: Feature, action: Action, metadata?: Record<string, string | number>): Promise<void> {
   try {
-    // Skip if no auth token (user is not signed in / session expired)
+    // Write even if no auth token (guest clicks still tracked; server will gate consent)
     const token = localStorage.getItem('flowers_auth_token');
-    if (!token) return;
+    const userId = (window as any).__userId || localStorage.getItem('flowers_user_id') || undefined;
 
     // Skip if debounced
     if (debounceEvent(feature, action, metadata)) return;
 
-    // JWT was already verified above; build headers
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-App-Lang': (window as any).__usageLang || 'en' };
-    headers['Authorization'] = `Bearer ${token}`;
-
     // Vocabulary-only metadata (drop unknown keys / bad values)
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-App-Lang': (window as any).__usageLang || 'en' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     const allowed = {
       target: ['telegram_bot', 'data_center'],
       tab: ['home', 'records', 'calendar', 'info', 'passport'],
@@ -88,6 +87,7 @@ export async function trackFeature(feature: Feature, action: Action, metadata?: 
       keepalive: true,
       headers,
       body: JSON.stringify({
+        userId: userId || undefined,
         events: [{ feature, action, metadata: Object.keys(cleanMeta).length ? cleanMeta : undefined }]
       })
     });

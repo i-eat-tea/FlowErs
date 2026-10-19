@@ -1498,8 +1498,8 @@ var METADATA_WHITELIST = /* @__PURE__ */ new Set([
 var usageRateLimits = /* @__PURE__ */ new Map();
 var RATE_LIMIT_WINDOW_MS = 6e4;
 var RATE_LIMIT_MAX_EVENTS = 120;
-function checkRateLimit(sessionId2, ip) {
-  const key = sessionId2 || ip;
+function checkRateLimit(sessionId, ip) {
+  const key = sessionId || ip;
   const now = Date.now();
   const entry = usageRateLimits.get(key);
   if (!entry || now > entry.resetAt) {
@@ -1533,14 +1533,14 @@ async function logServerEvent({ userId, role: role2, req, feature, action, metad
   try {
     if (!await hasConsent(userId)) return;
     const lang = getLang(req);
-    const sessionId2 = req.cookies?.flowers_sid || null;
-    await writeUsageEvent({ userId, role: role2, sessionId: sessionId2, featureKey: feature, action, source: "server", lang: lang || void 0, metadata });
+    const sessionId = req.cookies?.flowers_sid || null;
+    await writeUsageEvent({ userId, role: role2, sessionId, featureKey: feature, action, source: "server", lang: lang || void 0, metadata });
   } catch {
   }
 }
 async function writeUsageEvent(params) {
   try {
-    const { userId, role: role2, sessionId: sessionId2, featureKey, action, source, lang, metadata } = params;
+    const { userId, role: role2, sessionId, featureKey, action, source, lang, metadata } = params;
     const allowed = {
       target: ["telegram_bot", "data_center"],
       tab: ["home", "records", "calendar", "info", "passport"],
@@ -1570,7 +1570,7 @@ async function writeUsageEvent(params) {
     await pool.execute(
       `INSERT INTO feature_usage (user_id, role, session_id, feature_key, action, source, lang, metadata)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [userId, role2, sessionId2, featureKey, action, source, lang || null, metaJson]
+      [userId, role2, sessionId, featureKey, action, source, lang || null, metaJson]
     );
   } catch (err) {
     console.error("[usage] Write failed:", err.message);
@@ -1661,11 +1661,13 @@ app.get("/api/user-consents/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.post("/api/usage", authenticateToken, async (req, res) => {
+app.post("/api/usage", optionalAuth, async (req, res) => {
   try {
-    const userId = req.user?.id || null;
+    let userId = req.user?.id || null;
+    if (!userId && req.body && typeof req.body.userId === "string") {
+      userId = req.body.userId;
+    }
     if (!userId) return res.status(204).send();
-    if (!await hasConsent(userId)) return res.status(204).send();
     const { events } = req.body;
     if (!Array.isArray(events) || events.length === 0 || events.length > 20) {
       return res.status(400).json({ error: "Invalid events array" });
@@ -1680,6 +1682,7 @@ app.post("/api/usage", authenticateToken, async (req, res) => {
       const { feature, action, metadata } = event;
       if (!VALID_FEATURES.has(feature)) continue;
       if (!VALID_ACTIONS.has(action)) continue;
+      const sessionId = req.cookies?.flowers_sid || null;
       writeUsageEvent({
         userId,
         role: role2,
