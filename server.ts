@@ -107,10 +107,10 @@ async function ensureProfile(userId: string): Promise<void> {
 // ─── Authentication API ───────────────────────────────────────────────────────
 
 // POST /api/auth/register
-// Body: { email, password, role?, fullName?, phone? }
+// Body: { email, password, role?, fullName?, phone?, consent?, lang? }
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, role = 'mother', fullName = '', phone = '' } = req.body;
+    const { email, password, role = 'mother', fullName = '', phone = '', consent, lang = 'en' } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -124,6 +124,11 @@ app.post('/api/auth/register', async (req, res) => {
     const validRoles = ['mother', 'doctor', 'hospital_admin', 'family'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    // Consent is required
+    if (consent !== true) {
+      return res.status(400).json({ error: 'consent_required' });
     }
 
     // Check if user already exists
@@ -152,9 +157,19 @@ app.post('/api/auth/register', async (req, res) => {
       const motherProfileId = 'moth-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
       await pool.execute<ResultSetHeader>(
         'INSERT INTO mother_profiles (id, user_id, full_name, phone, language_pref) VALUES (?, ?, ?, ?, ?)',
-        [motherProfileId, userId, fullName, phone, 'kh'],
+        [motherProfileId, userId, fullName, phone, lang],
       );
     }
+
+    // Insert consent record
+    await pool.execute(
+      `INSERT IGNORE INTO user_consents (user_id, consent_version, lang, accepted_at)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
+      [userId, CONSENT_VERSION, lang]
+    );
+
+    // Clear consent cache entry so hasConsent picks up the new row immediately
+    consentCache.delete(userId);
 
     // Generate token
     const token = generateToken({ id: userId, email: email.toLowerCase().trim(), role });
@@ -171,7 +186,15 @@ app.post('/api/auth/register', async (req, res) => {
         subscriptionTier: 'free',
         subscriptionStatus: 'pending',
       },
+      consentRequired: false,
     });
+
+    // Server-side hook: signup
+    try {
+      if (await hasConsent(userId)) {
+        await logServerEvent({ userId, role, req, feature: 'signup', action: 'create' });
+      }
+    } catch {}
   } catch (err: any) {
     console.error('POST /api/auth/register error:', err.message);
     res.status(500).json({ error: 'Registration failed due to a server error' });
@@ -239,7 +262,21 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
 
+    // Check consent status directly from DB (bypass cache)
+    const [consentRows] = await pool.execute<RowDataPacket[]>(
+      'SELECT 1 FROM user_consents WHERE user_id = ? AND consent_version = ? LIMIT 1',
+      [user.id, CONSENT_VERSION]
+    );
+    const consentRequired = consentRows.length === 0;
+
     const token = generateToken({ id: user.id, email: user.email, role: user.role });
+
+    // Server-side hook: login success — only if consent is not required (i.e. no consent row exists yet)
+    try {
+      if (!consentRequired && await hasConsent(user.id)) {
+        await logServerEvent({ userId: user.id, role, req, feature: 'login', action: 'create' });
+      }
+    } catch {}
 
     res.json({
       success: true,
@@ -253,6 +290,7 @@ app.post('/api/auth/login', async (req, res) => {
         subscriptionStatus: user.subscription_status || 'pending',
         ...profileData,
       },
+      consentRequired,
     });
   } catch (err: any) {
     console.error('POST /api/auth/login error:', err.message);
@@ -515,6 +553,13 @@ app.put('/api/mother-profile/:userId/setup', async (req, res) => {
         weightKg: weight,
       },
     });
+
+    // Server-side hook: setup_wizard
+    try {
+      if (await hasConsent(userId)) {
+        await logServerEvent({ userId, role: 'mother', req, feature: 'setup_wizard', action: 'complete' });
+      }
+    } catch {}
   } catch (err: any) {
     console.error('PUT /api/mother-profile/setup error:', err.message);
     res.status(500).json({ error: 'Failed to save pregnancy setup' });
@@ -1526,7 +1571,7 @@ app.post('/api/doctor/records/:recordId/notes', async (req, res) => {
     }
 
     const [rows] = await pool.execute<RowDataPacket[]>(
-      'SELECT notes FROM medical_records WHERE id = ?',
+      'SELECT notes, user_id FROM medical_records WHERE id = ?',
       [recordId],
     );
 
@@ -1534,6 +1579,7 @@ app.post('/api/doctor/records/:recordId/notes', async (req, res) => {
       return res.status(404).json({ error: 'Record not found' });
     }
 
+    const userId = rows[0].user_id;
     const existingNotes = rows[0].notes || '';
     const timestamp = new Date().toISOString().split('T')[0];
     const drHeader = doctorName ? `Dr. ${doctorName}` : 'Attending Healthcare Provider';
@@ -1546,6 +1592,9 @@ app.post('/api/doctor/records/:recordId/notes', async (req, res) => {
     );
 
     res.json({ success: true, notes: updatedNotes });
+
+    // Server-side hook: doctor_note
+    try { if (userId && await hasConsent(userId)) await logServerEvent({ userId, role: 'mother', req, feature: 'doctor_note', action: 'create' }); } catch {}
   } catch (err: any) {
     console.error('POST /api/doctor/records/:recordId/notes error:', err.message);
     res.status(500).json({ error: 'Database error', details: err.message });
@@ -1644,7 +1693,13 @@ async function hasConsent(userId: string): Promise<boolean> {
   if (cached && (now - cached.ts) < CONSENT_CACHE_TTL) return cached.accepted;
   const [rows] = await pool.execute<RowDataPacket[]>('SELECT 1 FROM user_consents WHERE user_id = ? AND consent_version = ? LIMIT 1', [userId, CONSENT_VERSION]);
   const accepted = rows.length > 0;
-  consentCache.set(userId, { accepted, ts: now });
+  // Cache only positive results; never cache a negative so a user who agrees
+  // is not stuck "not consented" for the cache TTL.
+  if (accepted) {
+    consentCache.set(userId, { accepted, ts: now });
+  } else {
+    consentCache.delete(userId);
+  }
   return accepted;
 }
 
@@ -1707,56 +1762,59 @@ async function writeUsageEvent(params: {
   }
 }
 
-// GET /api/consent
-app.get('/api/consent', async (req, res) => {
-  const userId = req.user?.id || null;
-  let dbConsent: boolean | null = null;
-  if (userId) {
-    try { dbConsent = await hasConsent(userId); } catch {}
+
+// GET /api/consent/status  — authenticated; consent gate decision
+app.get('/api/consent/status', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id || null;
+    if (!userId) return res.status(401).json({ error: 'auth required' });
+    const [rows] = await pool.execute<RowDataPacket[]>('SELECT 1 FROM user_consents WHERE user_id = ? AND consent_version = ? LIMIT 1', [userId, CONSENT_VERSION]);
+    res.json({ required: rows.length === 0, version: CONSENT_VERSION });
+  } catch (err: any) {
+    console.error('GET /api/consent/status error:', err.message);
+    res.status(500).json({ error: err.message });
   }
-  const cookie = req.cookies.flowers_consent;
-  if (dbConsent === true) return res.json({ consent: 'accepted', source: 'db' });
-  if (cookie === 'accepted' || cookie === 'declined') return res.json({ consent: cookie, source: 'cookie' });
-  res.json({ consent: dbConsent ? 'accepted' : null, source: dbConsent ? 'db' : null });
 });
 
-// POST /api/consent
-app.post('/api/consent', async (req, res) => {
-  const { choice } = req.body;
-  if (choice !== 'accepted' && choice !== 'declined') {
-    return res.status(400).json({ error: 'Invalid choice' });
-  }
+// POST /api/consent — accept or decline (no longer unauthenticated)
+app.post('/api/consent', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { choice } = req.body;
+    if (choice !== 'accepted' && choice !== 'declined') {
+      return res.status(400).json({ error: 'Invalid choice' });
+    }
 
-  const isProd = process.env.NODE_ENV === 'production';
-  const cookieOpts: any = {
-    path: '/',
-    maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
-    sameSite: 'lax',
-    httpOnly: false
-  };
-  if (isProd) cookieOpts.secure = true;
+    const isProd = process.env.NODE_ENV === 'production';
+    const cookieOpts: any = {
+      path: '/',
+      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days, informational only
+      sameSite: 'lax',
+      httpOnly: false
+    };
+    if (isProd) cookieOpts.secure = true;
+    if (choice === 'accepted') {
+      res.cookie('flowers_consent', 'accepted', cookieOpts);
+    } else {
+      res.clearCookie('flowers_consent', { path: '/' });
+    }
 
-  res.cookie('flowers_consent', choice, cookieOpts);
+    // userId comes ONLY from the verified JWT — never from the request body.
+    const authUserId = req.user?.id || null;
+    const lang = (req.body && typeof req.body.lang === 'string') ? req.body.lang : 'en';
 
-  // DB insert for consent visibility (works with or without full auth session)
-  const cookieUserId = req.cookies.flowers_sid ? null : null; // sid is session, not user
-  const bodyUserId = (req.body && req.body.userId) || (req.body && req.body.user_id) || null;
-  const authUserId = req.user?.id || null;
-  const userId = authUserId || bodyUserId || null;
-  if (userId && choice === 'accepted') {
-    try {
+    if (choice === 'accepted' && authUserId) {
       await pool.execute(
-        `INSERT INTO user_consents (user_id, consent_version, lang, accepted_at)
-         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-         ON DUPLICATE KEY UPDATE consent_version = VALUES(consent_version), accepted_at = CURRENT_TIMESTAMP`,
-        [userId, CONSENT_VERSION, req.body.lang || 'en']
+        `INSERT IGNORE INTO user_consents (user_id, consent_version, lang, accepted_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
+        [authUserId, CONSENT_VERSION, lang]
       );
-    } catch (e: any) { console.error('[consent DB insert]', e.message); }
-  }
+      consentCache.delete(authUserId);
+    } else if (choice === 'declined') {
+      res.clearCookie('flowers_sid', { path: '/', httpOnly: true });
+    }
 
-  if (choice === 'accepted') {
-    // Generate session ID if not present
-    if (!req.cookies.flowers_sid) {
+    // Generate session id when accepting
+    if (choice === 'accepted' && !req.cookies.flowers_sid) {
       const crypto = await import('crypto');
       const sid = crypto.randomBytes(16).toString('hex');
       const sidOpts: any = {
@@ -1768,12 +1826,12 @@ app.post('/api/consent', async (req, res) => {
       if (isProd) sidOpts.secure = true;
       res.cookie('flowers_sid', sid, sidOpts);
     }
-  } else {
-    // Clear session ID
-    res.clearCookie('flowers_sid', { path: '/', httpOnly: true });
-  }
 
-  res.json({ consent: choice });
+    res.json({ consent: choice });
+  } catch (err: any) {
+    console.error('POST /api/consent error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/usage
@@ -1788,47 +1846,35 @@ app.get('/api/usage', optionalAuth, async (req: AuthRequest, res) => {
 });
 
 // GET /api/user-consents/:id
-app.get('/api/user-consents/:id', optionalAuth, async (req: AuthRequest, res) => {
+app.get('/api/user-consents/:id', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const userId = req.params.id || req.body?.userId || req.user?.id || null;
+    const userId = req.params.id || null;
     if (!userId) return res.status(400).json({ error: 'id required' });
     const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM user_consents WHERE user_id = ?', [userId]);
     res.json(rows);
   } catch (err: any) { console.error('GET /api/user-consents error:', err.message); res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/usage
-app.post('/api/usage', optionalAuth, async (req: AuthRequest, res) => {
+// POST /api/usage  — fire usage events
+app.post('/api/usage', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const consent = req.cookies.flowers_consent;
-    if (consent !== 'accepted') {
-      return res.status(204).send();
-    }
-
-    // Server-authoritative consent check for authenticated users
-    if (req.user?.id && !(await hasConsent(req.user.id))) {
-      return res.status(204).send();
-    }
+    // Gate on: valid JWT (req.user) AND hasConsent. No token => 204, nothing written.
+    const userId = req.user?.id || null;
+    if (!userId) return res.status(204).send();
+    if (!(await hasConsent(userId))) return res.status(204).send();
 
     const { events } = req.body;
     if (!Array.isArray(events) || events.length === 0 || events.length > 20) {
       return res.status(400).json({ error: 'Invalid events array' });
     }
 
-    const sessionId = req.cookies.flowers_sid || null;
     const ip = (req.ip || req.connection.remoteAddress || '').replace('::ffff:', '');
 
-    if (!checkRateLimit(sessionId, ip)) {
+    if (!checkRateLimit(userId, ip)) {
       return res.status(429).json({ error: 'Rate limit exceeded' });
     }
 
-    const userId = req.user?.id || null;
     const role = req.user?.role || null;
-
-    if (userId && !(await hasConsent(userId))) {
-      return res.status(204).send();
-    }
-
     const lang = getLang(req);
     for (const event of events) {
       const { feature, action, metadata } = event;

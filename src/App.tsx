@@ -16,7 +16,7 @@ import {
 } from './data';
 
 // Tracking
-import { trackFeature } from './lib/usage';
+import { trackFeature, setUsageLang } from './lib/usage';
 
 // Components — Mother
 import Header from './components/Header';
@@ -372,6 +372,11 @@ export default function App() {
     }
   }, [isLoggedIn, userId]);
 
+  // Set usage language when language changes (and once on mount via effect below)
+  useEffect(() => {
+    setUsageLang(lang);
+  }, [lang]);
+
   // Sync document language
   useEffect(() => {
     document.documentElement.lang = lang === 'kh' ? 'km' : 'en';
@@ -501,7 +506,7 @@ export default function App() {
 
   // ─── Auth Handlers ─────────────────────────────────────────────────────────
 
-  const handleLoginSuccess = (motherName: string, serverUserId: string) => {
+  const handleLoginSuccess = (motherName: string, serverUserId: string, consentRequired?: boolean) => {
     // CRITICAL: Store the actual user ID from the server
     localStorage.setItem('flowers_user_id', serverUserId);
     setUserId(serverUserId); // Update state immediately
@@ -526,11 +531,12 @@ export default function App() {
       fullName: motherName,
     }).catch(() => {});
 
-    // Open consent gate after sign-in (server says consent required for existing/new users)
-    setConsentGateOpen(true);
+    // Open consent gate only when the server says consent is actually required
+    // (a user who ticked the register checkbox should not see it again)
+    setConsentGateOpen(consentRequired === true);
   };
 
-  const handleDoctorLoginSuccess = (email: string, role: 'doctor' | 'hospital_admin') => {
+  const handleDoctorLoginSuccess = (email: string, role: 'doctor' | 'hospital_admin', consentRequired?: boolean) => {
     // Extract doctor name from email (e.g., "dr.sophy@hospital.com" → "Dr. Sophy")
     const nameParts = email.split('@')[0].split('.');
     const name = nameParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
@@ -545,7 +551,7 @@ export default function App() {
     localStorage.setItem('flowers_doctor_email', email);
     localStorage.setItem('flowers_doctor_name', name);
 
-    setConsentGateOpen(true);
+    setConsentGateOpen(consentRequired === true);
   };
 
   const handleSelectPatient = useCallback(async (motherProfileId: string) => {
@@ -698,6 +704,29 @@ export default function App() {
       </div>
     );
   }
+
+  // Session restore: if a stored token exists, check consent status
+  useEffect(() => {
+    const token = localStorage.getItem('flowers_auth_token');
+    if (token && isLoggedIn && !consentGateOpen) {
+      (async () => {
+        try {
+          const res = await fetch('/api/consent/status', {
+            headers: { 'Authorization': `Bearer ${token}`, 'X-App-Lang': lang === 'kh' ? 'kh' : 'en' }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.required === true) setConsentGateOpen(true);
+          }
+        } catch {}
+      })();
+    }
+  }, [isLoggedIn, lang]);
+
+  // Set usage language when language changes
+  useEffect(() => {
+    setUsageLang(lang);
+  }, [lang]);
 
   // 1b. CONSENT GATE — shown after sign-in / on session restore before app UI
   if (consentGateOpen) {

@@ -41,30 +41,11 @@ export default function FeatureWalkthrough({ lang, onComplete, onSkip }: Feature
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
-    // Check server consent via API, fall back to cookie, never hide on missing cookie alone
-    let mounted = true;
-    async function check() {
-      try {
-        const res = await fetch('/api/consent', { headers: { 'X-App-Lang': lang === 'kh' ? 'kh' : 'en' } });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!mounted) return;
-        if (data.consent === 'accepted') {
-          if (!localStorage.getItem(WALKTHROUGH_KEY)) {
-            setVisible(true);
-            trackFeature('walkthrough', 'start', { step: 1, lang });
-          }
-        } else if (document.cookie.match(/flowers_consent=accepted/)) {
-          // Legacy cookie fallback only when server silent
-          if (!localStorage.getItem(WALKTHROUGH_KEY)) {
-            setVisible(true);
-            trackFeature('walkthrough', 'start', { step: 1, lang });
-          }
-        }
-      } catch {}
+    // Consented users proceed directly; consent is guaranteed by ConsentGate
+    if (!localStorage.getItem(WALKTHROUGH_KEY)) {
+      setVisible(true);
+      trackFeature('walkthrough', 'start', { step: 1, lang });
     }
-    check();
-    return () => { mounted = false; };
   }, [lang]);
 
   const steps = STEPS[lang];

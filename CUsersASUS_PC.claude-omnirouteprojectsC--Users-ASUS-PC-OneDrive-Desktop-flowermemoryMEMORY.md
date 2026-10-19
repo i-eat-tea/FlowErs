@@ -1,1 +1,0 @@
-- [RecordsView Cleanup + Share QR](C:\Users\ASUS_PC\OneDrive\Desktop\flower\src\components\RecordsView.tsx) — cleaned activeCategory, added folder-style category bar + Share QR button

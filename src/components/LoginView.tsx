@@ -88,7 +88,7 @@ export default function LoginView({ lang, setLang, onLoginSuccess, onSwitchToDoc
           if (data.user.subscriptionTier) localStorage.setItem('flowers_subscription_tier', data.user.subscriptionTier);
 
           const userName = data.user.fullName || data.user.email.split('@')[0];
-          onLoginSuccess(userName, data.user.id);
+          onLoginSuccess(userName, data.user.id, data.consentRequired);
         } else {
           setError(
             lang === 'en'
@@ -123,7 +123,7 @@ export default function LoginView({ lang, setLang, onLoginSuccess, onSwitchToDoc
           localStorage.removeItem('flowers_pregnancy_setup_completed');
 
           const userName = data.user.fullName || fullName.trim() || data.user.email.split('@')[0];
-          onLoginSuccess(userName, data.user.id);
+          onLoginSuccess(userName, data.user.id, data.consentRequired);
         } else {
           setError(
             lang === 'en'

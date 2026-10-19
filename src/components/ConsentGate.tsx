@@ -8,7 +8,40 @@ import { ShieldCheck } from 'lucide-react';
 
 export default function ConsentGate({ lang, onAgree, onDecline }: { lang: 'en' | 'kh'; onAgree: () => void; onDecline: () => void }) {
   const [checked, setChecked] = useState(false);
+  const [agreeError, setAgreeError] = useState('');
   const isEn = lang === 'en';
+  const handleAgree = async () => {
+    setAgreeError('');
+    try {
+      const token = localStorage.getItem('flowers_auth_token');
+      const res = await fetch('/api/consent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+          'X-App-Lang': lang === 'kh' ? 'kh' : 'en',
+        },
+        body: JSON.stringify({ choice: 'accepted', lang }),
+      });
+      if (res.ok) {
+        onAgree();
+      } else {
+        setAgreeError(isEn ? 'Failed to save consent. Please try again.' : 'ប failed ស save consent. ស try again.');
+      }
+    } catch {
+      setAgreeError(isEn ? 'Network error. Please retry.' : 'Network error. ស try again.');
+    }
+  };
+
+  const handleDecline = () => {
+    // Clear session on decline (logout) — consent is not optional
+    localStorage.removeItem('flowers_auth_token');
+    localStorage.removeItem('flowers_user_id');
+    localStorage.removeItem('flowers_is_logged_in');
+    localStorage.removeItem('flowers_user_role');
+    onDecline();
+  };
+
   return (
     <div className="fixed inset-0 z-[70] bg-[#2F6F8F]/70 backdrop-blur-md flex items-center justify-center p-4" id="consent-gate">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border-2 border-[#AEE3D8] p-6 space-y-4">
@@ -27,9 +60,10 @@ export default function ConsentGate({ lang, onAgree, onDecline }: { lang: 'en' |
         </label>
         <p className="text-[10px] text-[#2F6F8F]/60">{isEn ? 'You need to agree to continue.' : 'You need to agree to continue.'}</p>
         <div className="flex gap-2 pt-2">
-          <button onClick={onAgree} disabled={!checked} className="flex-1 py-2.5 bg-gradient-to-r from-[#FA6B90] to-[#F4A6B5] text-white rounded-xl font-black text-xs disabled:opacity-50">{isEn ? 'Agree & continue' : 'Agree & continue'}</button>
-          <button onClick={onDecline} className="flex-1 py-2.5 bg-[#FDDEEC] text-[#2F6F8F] rounded-xl font-black text-xs">{isEn ? 'Decline' : 'Decline'}</button>
+          <button onClick={handleAgree} disabled={!checked} className="flex-1 py-2.5 bg-gradient-to-r from-[#FA6B90] to-[#F4A6B5] text-white rounded-xl font-black text-xs disabled:opacity-50">{isEn ? 'Agree & continue' : 'Agree & continue'}</button>
+          <button onClick={handleDecline} className="flex-1 py-2.5 bg-[#FDDEEC] text-[#2F6F8F] rounded-xl font-black text-xs">{isEn ? 'Decline' : 'Decline'}</button>
         </div>
+        {agreeError && <p className="text-xs text-red-600 font-bold">{agreeError}</p>}
       </div>
     </div>
   );

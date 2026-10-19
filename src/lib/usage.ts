@@ -45,17 +45,16 @@ function debounceEvent(feature: Feature, action: Action): boolean {
 /** Track a feature usage event. Fire and forget. */
 export async function trackFeature(feature: Feature, action: Action, metadata?: Record<string, string | number>): Promise<void> {
   try {
-    // Skip if consent not accepted
-    const match = document.cookie.match(/flowers_consent=([^;]+)/);
-    if (match?.[1] !== 'accepted') return;
+    // Skip if no auth token (user is not signed in / session expired)
+    const token = localStorage.getItem('flowers_auth_token');
+    if (!token) return;
 
     // Skip if debounced
     if (debounceEvent(feature, action)) return;
 
-    // Collect JWT if present
-    const token = localStorage.getItem('flowers_auth_token');
+    // JWT was already verified above; build headers
     const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-App-Lang': (window as any).__usageLang || 'en' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    headers['Authorization'] = `Bearer ${token}`;
 
     await fetch('/api/usage', {
       method: 'POST',
