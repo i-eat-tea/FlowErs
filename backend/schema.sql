@@ -168,5 +168,5 @@ CREATE TABLE IF NOT EXISTS feature_usage (
     INDEX idx_session (session_id),
     INDEX idx_created (created_at)
 );
-CREATE TABLE IF NOT EXISTS user_consents (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id VARCHAR(36) NOT NULL, consent_version VARCHAR(32) NOT NULL, lang ENUM("en","kh") NULL, accepted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, consent_version), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS user_consents (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id VARCHAR(36) NOT NULL, consent_version VARCHAR(32) NOT NULL, lang ENUM('en','kh') NULL, accepted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, consent_version), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE);
 CREATE TABLE IF NOT EXISTS daily_notes (id VARCHAR(36) PRIMARY KEY, user_id VARCHAR(36) NOT NULL, note_date DATE NOT NULL, task VARCHAR(255) NULL, note TEXT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, INDEX idx_user_note_date (user_id, note_date));
